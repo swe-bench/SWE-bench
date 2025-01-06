@@ -1,7 +1,7 @@
-import json
-from argparse import ArgumentParser
-
 import docker
+import json
+
+from argparse import ArgumentParser
 
 """
 Script for removing containers associated with specified instance IDs.

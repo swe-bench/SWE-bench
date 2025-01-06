@@ -56,6 +56,10 @@ setuptools.setup(
             'jedi',
             'tenacity',
         ],
+        'test': [
+            'pytest',
+            'pytest-cov',
+        ]
     },
     include_package_data=True,
 )

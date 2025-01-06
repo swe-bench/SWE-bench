@@ -1,4 +1,4 @@
-__version__ = "2.1.7"
+__version__ = "3.0.0"
 
 from swebench.collect.build_dataset import main as build_dataset
 from swebench.collect.get_tasks_pipeline import main as get_tasks_pipeline
@@ -48,8 +48,7 @@ from swebench.harness.run_evaluation import (
 )
 
 from swebench.harness.utils import (
-    get_environment_yml,
-    get_requirements,
+    run_threadpool,
 )
 
 from swebench.versioning.constants import (
@@ -59,9 +58,9 @@ from swebench.versioning.constants import (
 
 from swebench.versioning.get_versions import (
     get_version,
-    map_version_to_task_instances,
     get_versions_from_build,
     get_versions_from_web,
+    map_version_to_task_instances,
 )
 
 from swebench.versioning.utils import (

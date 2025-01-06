@@ -1,9 +1,11 @@
 import re
-from enum import Enum
+
 from swebench.harness.constants import TestStatus
+from swebench.harness.test_spec.test_spec import TestSpec
+from swebench.harness.log_parsers.utils import ansi_escape
 
 
-def parse_log_pytest(log: str) -> dict[str, str]:
+def parse_log_pytest(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework
 
@@ -25,7 +27,7 @@ def parse_log_pytest(log: str) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_pytest_options(log: str) -> dict[str, str]:
+def parse_log_pytest_options(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework with options
 
@@ -56,7 +58,7 @@ def parse_log_pytest_options(log: str) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_django(log: str) -> dict[str, str]:
+def parse_log_django(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with Django tester framework
 
@@ -132,7 +134,7 @@ def parse_log_django(log: str) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_pytest_v2(log: str) -> dict[str, str]:
+def parse_log_pytest_v2(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework (Later Version)
 
@@ -157,11 +159,11 @@ def parse_log_pytest_v2(log: str) -> dict[str, str]:
         elif any([line.endswith(x.value) for x in TestStatus]):
             test_case = line.split()
             if len(test_case) >= 2:
-                test_status_map[test_case[0]] = test_case[1]
+                test_status_map[test_case[1]] = test_case[0]
     return test_status_map
 
 
-def parse_log_seaborn(log: str) -> dict[str, str]:
+def parse_log_seaborn(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with seaborn testing framework
 
@@ -187,7 +189,7 @@ def parse_log_seaborn(log: str) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_sympy(log: str) -> dict[str, str]:
+def parse_log_sympy(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with Sympy framework
 
@@ -205,9 +207,6 @@ def parse_log_sympy(log: str) -> dict[str, str]:
     for line in log.split("\n"):
         line = line.strip()
         if line.startswith("test_"):
-            if line.endswith("[FAIL]") or line.endswith("[OK]"):
-                line = line[: line.rfind("[")]
-                line = line.strip()
             if line.endswith(" E"):
                 test = line.split()[0]
                 test_status_map[test] = TestStatus.ERROR.value
@@ -220,7 +219,7 @@ def parse_log_sympy(log: str) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_matplotlib(log: str) -> dict[str, str]:
+def parse_log_matplotlib(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     Parser for test logs generated with PyTest framework
 
@@ -261,7 +260,7 @@ parse_log_scikit = parse_log_pytest_v2
 parse_log_sphinx = parse_log_pytest_v2
 
 
-MAP_REPO_TO_PARSER = {
+MAP_REPO_TO_PARSER_PY = {
     "astropy/astropy": parse_log_astropy,
     "django/django": parse_log_django,
     "marshmallow-code/marshmallow": parse_log_marshmallow,

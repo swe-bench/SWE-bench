@@ -307,6 +307,8 @@ def should_remove(
     Determine if an image should be removed based on cache level and clean flag.
     """
     existed_before = image_name in prior_images
+    if '/' in image_name:
+        image_name = image_name.split('/', 1)[-1]
     if image_name.startswith("sweb.base"):
         if cache_level in {"none"} and (clean or not existed_before):
             return True

@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from swebench.harness.constants import KEY_INSTANCE_ID
 from swebench.harness.docker_build import build_instance_images
 from swebench.harness.docker_utils import list_images
-from swebench.harness.test_spec import make_test_spec
+from swebench.harness.test_spec.test_spec import make_test_spec
 from swebench.harness.utils import load_swebench_dataset, str2bool
 
 
@@ -14,7 +14,9 @@ def filter_dataset_to_build(
         dataset: list,
         instance_ids: list | None,
         client: docker.DockerClient,
-        force_rebuild: bool
+        force_rebuild: bool,
+        namespace: str = None,
+        tag: str = None,
     ):
     """
     Filter the dataset to only include instances that need to be built.
@@ -43,7 +45,7 @@ def filter_dataset_to_build(
             continue
 
         # Check if the instance needs to be built (based on force_rebuild flag and existing images)
-        spec = make_test_spec(instance)
+        spec = make_test_spec(instance, namespace=namespace, instance_image_tag=tag)
         if force_rebuild:
             data_to_build.append(instance)
         elif spec.instance_image_key not in existing_images:
@@ -59,6 +61,8 @@ def main(
     max_workers,
     force_rebuild,
     open_file_limit,
+    namespace,
+    tag,
 ):
     """
     Build Docker images for the specified instances.
@@ -75,7 +79,7 @@ def main(
 
     # Filter out instances that were not specified
     dataset = load_swebench_dataset(dataset_name, split)
-    dataset = filter_dataset_to_build(dataset, instance_ids, client, force_rebuild)
+    dataset = filter_dataset_to_build(dataset, instance_ids, client, force_rebuild, namespace, tag)
 
     # Build images for remaining instances
     successful, failed = build_instance_images(
@@ -83,6 +87,8 @@ def main(
         dataset=dataset,
         force_rebuild=force_rebuild,
         max_workers=max_workers,
+        namespace=namespace,
+        tag=tag,
     )
     print(f"Successfully built {len(successful)} images")
     print(f"Failed to build {len(failed)} images")
@@ -96,5 +102,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_workers", type=int, default=4, help="Max workers for parallel processing")
     parser.add_argument("--force_rebuild", type=str2bool, default=False, help="Force rebuild images")
     parser.add_argument("--open_file_limit", type=int, default=8192, help="Open file limit")
+    parser.add_argument("--namespace", type=str, default=None, help="Namespace to use for the images")
+    parser.add_argument("--tag", type=str, default=None, help="Tag to use for the images")
     args = parser.parse_args()
     main(**vars(args))
