@@ -11,8 +11,6 @@ X11_DEPS = [
 ]
 
 # Constants - Task Instance Installation Environment
-
-
 SPECS_CALYPSO = {
     **{k: {
         "apt-pkgs": ["libsass-dev", "sassc"],
@@ -157,7 +155,6 @@ MAP_REPO_VERSION_TO_SPECS_JS = {
     "markedjs/marked": SPECS_MARKED,
     "processing/p5.js": SPECS_P5_JS,
     "diegomura/react-pdf": SPECS_REACT_PDF,
-
 }
 
 # Constants - Repository Specific Installation Instructions

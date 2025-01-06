@@ -261,4 +261,3 @@ def get_eval_report(
         report_map[instance_id]["tests_status"] = report  # type: ignore
     
     return report_map
-

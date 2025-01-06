@@ -110,6 +110,4 @@ FAIL_ONLY_REPOS = {
     "chartjs/Chart.js",
     "processing/p5.js",
     "markedjs/marked",
-    "bpmn-io/bpmn-js",
-    "openlayers/openlayers",
 }
