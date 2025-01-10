@@ -39,6 +39,8 @@ setuptools.setup(
         'requests',
         'rich',
         'unidiff',
+        'tenacity',
+        'modal',
         'tqdm',
     ],
     extras_require={
