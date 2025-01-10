@@ -176,9 +176,6 @@ def build_base_images(
     base_images = {
         x.base_image_key: (x.base_dockerfile, x.platform) for x in test_specs
     }
-    if force_rebuild:
-        for key in base_images:
-            remove_image(client, key, "quiet")
 
     # Build the base images
     for image_name, (dockerfile, platform) in base_images.items():
