@@ -1,3 +1,5 @@
+# This file contains logic for running evaluations on Modal: <https://modal.com/>.
+
 from __future__ import annotations
 
 import json
@@ -19,6 +21,10 @@ from logging import Logger
 from swebench.harness.docker_build import setup_logger
 from swebench.harness.constants import KEY_INSTANCE_ID
 from swebench.harness.utils import EvaluationError
+
+SANDBOX_ENTRYPOINT = "run_evaluation_modal_entrypoint"
+LOCAL_SANDBOX_ENTRYPOINT_PATH = (Path(__file__).parent / f"{SANDBOX_ENTRYPOINT}.py").resolve()
+REMOTE_SANDBOX_ENTRYPOINT_PATH = f"/root/{SANDBOX_ENTRYPOINT}.py"
 
 import asyncio
 import tenacity
@@ -60,7 +66,10 @@ class ModalSandboxRuntime:
         # Hack for pylint
         self.write_file("/sys/fs/cgroup/cpu/cpu.shares", "2048")
 
-    @tenacity.retry(stop=tenacity.stop_after_attempt(5))
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(7),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
+    )
     def _get_sandbox(self, timeout: int | None = None):
         # Sometimes network flakiness causes the image build to fail,
         # so we retry a few times.
@@ -68,7 +77,17 @@ class ModalSandboxRuntime:
             # Default 30 minutes
             timeout = 60 * 30
 
-        return modal.Sandbox.create(image=self.image, timeout=timeout, cpu=4)
+        return modal.Sandbox.create(
+            image=self.image,
+            timeout=timeout,
+            cpu=4,
+            mounts=[
+                modal.Mount.from_local_file(
+                    REMOTE_SANDBOX_ENTRYPOINT_PATH,
+                    REMOTE_SANDBOX_ENTRYPOINT_PATH,
+                )
+            ],
+        )
     
     async def _read_stream(self, stream: modal.io_streams.StreamReader, output_list: list[str]):
         try:
@@ -91,22 +110,17 @@ class ModalSandboxRuntime:
         except asyncio.CancelledError:
             pass
 
-    def write_file(self, file_path: str, content: str) -> modal.container_process.ContainerProcess:
-        bash_command = f"""cat <<'EOF' > {file_path}
-{content}
-EOF"""
-        p = self.sandbox.exec("bash", "-c", bash_command)
-        p.wait()
-        return p
+    def write_file(self, file_path: str, content: str):
+        self.sandbox.open(file_path, "w").write(content)
     
-    def exec(self, *args, **kwargs) -> tuple[str, int]:
+    def exec(self, command: str) -> tuple[str, int]:
         """
         Execute a command in the sandbox.
 
         Returns:
             tuple[str, int]: Sandbox output and return code.
         """
-        p = self.sandbox.exec(*args, **kwargs)
+        p = self.sandbox.exec("python", "-m", SANDBOX_ENTRYPOINT, command)
         stdout = []
         stderr = []
         try:
@@ -142,6 +156,11 @@ EOF"""
     @staticmethod
     def get_instance_image(test_spec: TestSpec) -> modal.Image:
         env_script = test_spec.setup_env_script
+        # add trusted host flag for Modal's PyPI mirror
+        env_script = env_script.replace(
+            "conda activate testbed && python -m pip install -r $HOME/requirements.txt",
+            "conda activate testbed && python -m pip install --trusted-host pypi-mirror.modal.local -r $HOME/requirements.txt"
+        )
         repo_script = test_spec.install_repo_script
 
         remote_env_script_path = "/root/setup_env.sh"
@@ -292,6 +311,12 @@ def get_log_dir(pred: dict, run_id: str, instance_id: str) -> Path:
 
 @app.function(
     image=swebench_image,
+    mounts=[
+        modal.Mount.from_local_file(
+            LOCAL_SANDBOX_ENTRYPOINT_PATH,
+            REMOTE_SANDBOX_ENTRYPOINT_PATH,
+        )
+    ],
     timeout=120*60, # Much larger than default timeout to account for image build time
 )
 def run_instance_modal(
@@ -334,8 +359,6 @@ def run_instance_modal(
         runner.write_file(patch_file, patch_diff)
 
         apply_patch_output, returncode = runner.exec(
-            "bash",
-            "-c",
             "cd /testbed && git apply -v /tmp/patch.diff",
         )
 
@@ -343,8 +366,6 @@ def run_instance_modal(
             logger.info(f"Failed to apply patch to container, trying again...")
 
             apply_patch_output, returncode = runner.exec(
-                "bash",
-                "-c",
                 "cd /testbed && patch --batch --fuzz=5 -p1 -i /tmp/patch.diff",
             )
 
@@ -363,29 +384,27 @@ def run_instance_modal(
 
         # Get git diff before running eval script
         git_diff_output_before, returncode = runner.exec(
-            "bash",
-            "-c",
             "cd /testbed && git diff",
         )
         logger.info(f"Git diff before:\n{git_diff_output_before}")
 
         eval_file = "/root/eval.sh"
         eval_script = test_spec.eval_script
-        # Hack for django
+        # django hack
         eval_script = eval_script.replace("locale-gen", "locale-gen en_US.UTF-8")
         runner.write_file(eval_file, eval_script)
 
         start_time = time.time()
 
         run_command = "cd /testbed"
+        # pylint hack
         if "pylint" in test_spec.instance_id:
             run_command += " && PYTHONPATH="
+        # increase recursion limit for testing
+        run_command += " && python3 -c 'import sys; sys.setrecursionlimit(10000)'"
+        # run eval script
         run_command += " && /bin/bash /root/eval.sh"
-        test_output, returncode = runner.exec(
-            "bash",
-            "-c",
-            run_command,
-        )
+        test_output, returncode = runner.exec(run_command)
 
         total_runtime = time.time() - start_time
 
@@ -397,11 +416,7 @@ def run_instance_modal(
             print(f"Test output for {instance_id} written to {test_output_path}")
 
         # Get git diff after running eval script
-        git_diff_output_after, returncode = runner.exec(
-            "bash",
-            "-c",
-            "cd /testbed && git diff",
-        )
+        git_diff_output_after, returncode = runner.exec("cd /testbed && git diff")
 
         # Check if git diff changed after running eval script
         logger.info(f"Git diff after:\n{git_diff_output_after}")
@@ -492,37 +507,38 @@ def run_instances_modal(
                     continue
                 run_test_specs.append(test_spec)
 
-            # Run instances that haven't been run yet
-            results = run_instance_modal.starmap(
-                [
-                    (
-                        test_spec,
-                        predictions[test_spec.instance_id],
-                        run_id,
-                        timeout,
-                    )
-                    for test_spec in run_test_specs
-                ],
-            )
+            if run_test_specs:
+                # Run instances that haven't been run yet
+                results = run_instance_modal.starmap(
+                    [
+                        (
+                            test_spec,
+                            predictions[test_spec.instance_id],
+                            run_id,
+                            timeout,
+                        )
+                        for test_spec in run_test_specs
+                    ],
+                )
 
-            for result in results:
-                result = cast(TestOutput, result)
+                for result in results:
+                    result = cast(TestOutput, result)
 
-                # Save logs locally
-                log_dir = result.log_dir
-                log_dir.mkdir(parents=True, exist_ok=True)
-                with open(log_dir / "run_instance.log", "w") as f:
-                    f.write(result.run_instance_log)
-                with open(log_dir / "test_output.txt", "w") as f:
-                    f.write(result.test_output)
-                with open(log_dir / "patch.diff", "w") as f:
-                    f.write(result.patch_diff)
-                with open(log_dir / "report.json", "w") as f:
-                    try:
-                        report_json = json.loads(result.report_json_str)
-                        json.dump(report_json, f, indent=4)
-                    except Exception:
-                        # This happens if the test fails with any exception
-                        print(f"{result.instance_id}: no report.json")
+                    # Save logs locally
+                    log_dir = result.log_dir
+                    log_dir.mkdir(parents=True, exist_ok=True)
+                    with open(log_dir / "run_instance.log", "w") as f:
+                        f.write(result.run_instance_log)
+                    with open(log_dir / "test_output.txt", "w") as f:
+                        f.write(result.test_output)
+                    with open(log_dir / "patch.diff", "w") as f:
+                        f.write(result.patch_diff)
+                    with open(log_dir / "report.json", "w") as f:
+                        try:
+                            report_json = json.loads(result.report_json_str)
+                            json.dump(report_json, f, indent=4)
+                        except Exception:
+                            # This happens if the test fails with any exception
+                            print(f"{result.instance_id}: no report.json")
 
             make_run_report(predictions, full_dataset, run_id)
