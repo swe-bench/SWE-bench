@@ -62,7 +62,7 @@ class TestSpec:
 
     @property
     def base_image_key(self):
-        return f"sweb.base.{self.arch}:latest"
+        return f"metrevals/swebench:sweb.base.{self.arch}"
 
     @property
     def env_image_key(self):
@@ -76,11 +76,11 @@ class TestSpec:
         hash_object.update(str(self.env_script_list).encode(UTF8))
         hash_value = hash_object.hexdigest()
         val = hash_value[:22]  # 22 characters is still very likely to be unique
-        return f"sweb.env.{self.arch}.{val}:latest"
+        return f"metrevals/swebench:sweb.env.{self.arch}.{val}"
 
     @property
     def instance_image_key(self):
-        return f"sweb.eval.{self.arch}.{self.instance_id}:latest"
+        return f"metrevals/swebench:sweb.eval.{self.arch}.{self.instance_id}"
 
     def get_instance_container_name(self, run_id=None):
         if not run_id:
@@ -316,6 +316,8 @@ def make_test_spec(instance: SWEbenchInstance) -> TestSpec:
         arch = "arm64" if instance_id not in USE_X86 else "x86_64"
     else:
         arch = "x86_64"
+
+    arch = "x86_64"
 
     return TestSpec(
         instance_id=instance_id,

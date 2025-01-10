@@ -2,30 +2,32 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 import traceback
-import docker
-import docker.errors
-from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+import docker
+import docker.errors
+from tqdm import tqdm
+
 from swebench.harness.constants import (
-    DOCKER_USER,
     BASE_IMAGE_BUILD_DIR,
+    DOCKER_USER,
     ENV_IMAGE_BUILD_DIR,
     INSTANCE_IMAGE_BUILD_DIR,
     MAP_REPO_VERSION_TO_SPECS,
     UTF8,
 )
-from swebench.harness.test_spec import (
-    get_test_specs_from_dataset,
-    make_test_spec,
-    TestSpec
-)
 from swebench.harness.docker_utils import (
     cleanup_container,
+    find_dependent_images,
     remove_image,
-    find_dependent_images
+)
+from swebench.harness.test_spec import (
+    TestSpec,
+    get_test_specs_from_dataset,
+    make_test_spec,
 )
 
 ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
@@ -70,15 +72,36 @@ def close_logger(logger):
         logger.removeHandler(handler)
 
 
+cached = {}
+
+
+def image_exists_on_docker_hub(image_name: str) -> bool:
+    global cached
+    # docker manifest inspect metrevals/swebench:sweb.base.x86_6411
+    if image_name in cached:
+        return cached[image_name]
+    try:
+        subprocess.check_call(
+            ["docker", "manifest", "inspect", image_name],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        cached[image_name] = True
+        return True
+    except subprocess.CalledProcessError:
+        cached[image_name] = False
+        return False
+
+
 def build_image(
-        image_name: str,
-        setup_scripts: dict,
-        dockerfile: str,
-        platform: str,
-        client: docker.DockerClient,
-        build_dir: Path,
-        nocache: bool = False
-    ):
+    image_name: str,
+    setup_scripts: dict,
+    dockerfile: str,
+    platform: str,
+    client: docker.DockerClient,
+    build_dir: Path,
+    nocache: bool = False,
+):
     """
     Builds a docker image with the given name, setup scripts, dockerfile, and platform.
 
@@ -91,6 +114,10 @@ def build_image(
         build_dir (Path): Directory for the build context (will also contain logs, scripts, and artifacts)
         nocache (bool): Whether to use the cache when building
     """
+    if image_exists_on_docker_hub(image_name):
+        print(f"Image {image_name} on {build_dir} already exists, skipping build.")
+        return
+
     # Create a logger for the build process
     logger = setup_logger(image_name, build_dir / "build_image.log")
     logger.info(
@@ -121,36 +148,47 @@ def build_image(
         logger.info(
             f"Building docker image {image_name} in {build_dir} with platform {platform}"
         )
-        response = client.api.build(
-            path=str(build_dir),
-            tag=image_name,
-            rm=True,
-            forcerm=True,
-            decode=True,
-            platform=platform,
-            nocache=nocache,
+
+        process = subprocess.Popen(
+            [
+                "docker",
+                "build",
+                "-t",
+                image_name,
+                ".",
+                "--platform",
+                platform,
+                "--push",
+            ],
+            cwd=build_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True,
         )
 
-        # Log the build process continuously
-        buildlog = ""
-        for chunk in response:
-            if "stream" in chunk:
-                # Remove ANSI escape sequences from the log
-                chunk_stream = ansi_escape.sub("", chunk["stream"])
-                logger.info(chunk_stream.strip())
-                buildlog += chunk_stream
-            elif "errorDetail" in chunk:
-                # Decode error message, raise BuildError
-                logger.error(
-                    f"Error: {ansi_escape.sub('', chunk['errorDetail']['message'])}"
-                )
-                raise docker.errors.BuildError(
-                    chunk["errorDetail"]["message"], buildlog
-                )
+        # Read the output line by line and write to logger
+        while True:
+            output = process.stdout.readline()
+            if output == "" and process.poll() is not None:
+                break
+            if output:
+                logger.info(output.strip())
+
+        # Check if the process completed successfully
+        retcode = process.poll()
+        if retcode != 0:
+            raise subprocess.CalledProcessError(retcode, process.args)
+
         logger.info("Image built successfully!")
+
     except docker.errors.BuildError as e:
         logger.error(f"docker.errors.BuildError during {image_name}: {e}")
         raise BuildImageError(image_name, str(e), logger) from e
+    except KeyboardInterrupt:
+        logger.error(f"Build process for {image_name} was interrupted.")
+        exit(1)
     except Exception as e:
         logger.error(f"Error building image {image_name}: {e}")
         raise BuildImageError(image_name, str(e), logger) from e
@@ -159,10 +197,8 @@ def build_image(
 
 
 def build_base_images(
-        client: docker.DockerClient,
-        dataset: list,
-        force_rebuild: bool = False
-    ):
+    client: docker.DockerClient, dataset: list, force_rebuild: bool = False
+):
     """
     Builds the base images required for the dataset if they do not already exist.
 
@@ -207,9 +243,9 @@ def build_base_images(
 
 
 def get_env_configs_to_build(
-        client: docker.DockerClient,
-        dataset: list,
-    ):
+    client: docker.DockerClient,
+    dataset: list,
+):
     """
     Returns a dictionary of image names to build scripts and dockerfiles for environment images.
     Returns only the environment images that need to be built.
@@ -223,27 +259,17 @@ def get_env_configs_to_build(
     test_specs = get_test_specs_from_dataset(dataset)
 
     for test_spec in test_specs:
-        # Check if the base image exists
-        try:
-            if test_spec.base_image_key not in base_images:
-                base_images[test_spec.base_image_key] = client.images.get(
-                    test_spec.base_image_key
-                )
-            base_image = base_images[test_spec.base_image_key]
-        except docker.errors.ImageNotFound:
+        print(
+            f"Checking if environment image {test_spec.env_image_key} needs to be built..."
+        )
+        if not image_exists_on_docker_hub(test_spec.base_image_key):
             raise Exception(
                 f"Base image {test_spec.base_image_key} not found for {test_spec.env_image_key}\n."
                 "Please build the base images first."
             )
 
         # Check if the environment image exists
-        image_exists = False
-        try:
-            env_image = client.images.get(test_spec.env_image_key)
-            image_exists = True
-        except docker.errors.ImageNotFound:
-            pass
-        if not image_exists:
+        if not image_exists_on_docker_hub(test_spec.env_image_key):
             # Add the environment image to the list of images to build
             image_scripts[test_spec.env_image_key] = {
                 "setup_script": test_spec.setup_env_script,
@@ -254,11 +280,11 @@ def get_env_configs_to_build(
 
 
 def build_env_images(
-        client: docker.DockerClient,
-        dataset: list,
-        force_rebuild: bool = False,
-        max_workers: int = 4
-    ):
+    client: docker.DockerClient,
+    dataset: list,
+    force_rebuild: bool = False,
+    max_workers: int = 4,
+):
     """
     Builds the environment images required for the dataset if they do not already exist.
 
@@ -329,11 +355,11 @@ def build_env_images(
 
 
 def build_instance_images(
-        client: docker.DockerClient,
-        dataset: list,
-        force_rebuild: bool = False,
-        max_workers: int = 4
-    ):
+    client: docker.DockerClient,
+    dataset: list,
+    force_rebuild: bool = False,
+    max_workers: int = 4,
+):
     """
     Builds the instance images required for the dataset if they do not already exist.
 
@@ -352,9 +378,15 @@ def build_instance_images(
 
     if len(env_failed) > 0:
         # Don't build images for instances that depend on failed-to-build env images
-        dont_run_specs = [spec for spec in test_specs if spec.env_image_key in env_failed]
-        test_specs = [spec for spec in test_specs if spec.env_image_key not in env_failed]
-        print(f"Skipping {len(dont_run_specs)} instances - due to failed env image builds")
+        dont_run_specs = [
+            spec for spec in test_specs if spec.env_image_key in env_failed
+        ]
+        test_specs = [
+            spec for spec in test_specs if spec.env_image_key not in env_failed
+        ]
+        print(
+            f"Skipping {len(dont_run_specs)} instances - due to failed env image builds"
+        )
     print(f"Building instance images for {len(test_specs)} instances")
     successful, failed = list(), list()
 
@@ -404,11 +436,11 @@ def build_instance_images(
 
 
 def build_instance_image(
-        test_spec: TestSpec,
-        client: docker.DockerClient,
-        logger: logging.Logger|None,
-        nocache: bool,
-    ):
+    test_spec: TestSpec,
+    client: docker.DockerClient,
+    logger: logging.Logger | None,
+    nocache: bool,
+):
     """
     Builds the instance image for the given test spec if it does not already exist.
 
@@ -419,7 +451,9 @@ def build_instance_image(
         nocache (bool): Whether to use the cache when building
     """
     # Set up logging for the build process
-    build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(":", "__")
+    build_dir = INSTANCE_IMAGE_BUILD_DIR / test_spec.instance_image_key.replace(
+        ":", "__"
+    )
     new_logger = False
     if logger is None:
         new_logger = True
@@ -431,29 +465,23 @@ def build_instance_image(
     dockerfile = test_spec.instance_dockerfile
 
     # Check that the env. image the instance image is based on exists
-    try:
-        client.images.get(env_image_name)
-    except docker.errors.ImageNotFound as e:
+    if not image_exists_on_docker_hub(env_image_name):
         raise BuildImageError(
             test_spec.instance_id,
             f"Environment image {env_image_name} not found for {test_spec.instance_id}",
             logger,
-        ) from e
+        )
     logger.info(
         f"Environment image {env_image_name} found for {test_spec.instance_id}\n"
         f"Building instance image {image_name} for {test_spec.instance_id}"
     )
 
     # Check if the instance image already exists
-    image_exists = False
-    try:
-        client.images.get(image_name)
-        image_exists = True
-    except docker.errors.ImageNotFound:
-        pass
+    image_exists = image_exists_on_docker_hub(image_name)
 
     # Build the instance image
     if not image_exists:
+        print("Building image", image_name)
         build_image(
             image_name=image_name,
             setup_scripts={
@@ -465,7 +493,9 @@ def build_instance_image(
             build_dir=build_dir,
             nocache=nocache,
         )
+        print(f"Image {image_name} built successfully.")
     else:
+        print(f"Image {image_exists} already exists, skipping build.")
         logger.info(f"Image {image_name} already exists, skipping build.")
 
     if new_logger:
@@ -473,13 +503,13 @@ def build_instance_image(
 
 
 def build_container(
-        test_spec: TestSpec,
-        client: docker.DockerClient,
-        run_id: str,
-        logger: logging.Logger,
-        nocache: bool,
-        force_rebuild: bool = False
-    ):
+    test_spec: TestSpec,
+    client: docker.DockerClient,
+    run_id: str,
+    logger: logging.Logger,
+    nocache: bool,
+    force_rebuild: bool = False,
+):
     """
     Builds the instance image for the given test spec and creates a container from the image.
 
@@ -500,7 +530,11 @@ def build_container(
     try:
         # Get configurations for how container should be created
         config = MAP_REPO_VERSION_TO_SPECS[test_spec.repo][test_spec.version]
-        user = DOCKER_USER if not config.get("execute_test_as_nonroot", False) else "nonroot"
+        user = (
+            DOCKER_USER
+            if not config.get("execute_test_as_nonroot", False)
+            else "nonroot"
+        )
         nano_cpus = config.get("nano_cpus")
 
         # Create the container

@@ -141,3 +141,13 @@ If you find our work helpful, please use the following citations.
 
 ## 🪪 License
 MIT. Check `LICENSE.md`.
+
+# Build Docker Images to Docker Hub
+
+1. First, setup the docker hub cloud builder
+2. Then:
+```
+docker login
+docker buildx use cloud-metrevals-vivaria
+python swebench/harness/prepare_images.py
+```
