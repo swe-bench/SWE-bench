@@ -10,10 +10,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from swebench.harness.constants import (
+    DOCKER_USER,
     BASE_IMAGE_BUILD_DIR,
     ENV_IMAGE_BUILD_DIR,
     INSTANCE_IMAGE_BUILD_DIR,
     MAP_REPO_VERSION_TO_SPECS,
+    UTF8,
 )
 from swebench.harness.test_spec import (
     get_test_specs_from_dataset,
@@ -54,7 +56,7 @@ def setup_logger(instance_id: str, log_file: Path, mode="w", add_stdout: bool = 
     """
     log_file.parent.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(f"{instance_id}.{log_file.name}")
-    handler = logging.FileHandler(log_file, mode=mode)
+    handler = logging.FileHandler(log_file, mode=mode, encoding=UTF8)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
@@ -248,14 +250,6 @@ def get_env_configs_to_build(
         try:
             env_image = client.images.get(test_spec.env_image_key)
             image_exists = True
-
-            if env_image.attrs["Created"] < base_image.attrs["Created"]:
-                # Remove the environment image if it was built after the base_image
-                for dep in find_dependent_images(client, test_spec.env_image_key):
-                    # Remove instance images that depend on this environment image
-                    remove_image(client, dep, "quiet")
-                remove_image(client, test_spec.env_image_key, "quiet")
-                image_exists = False
         except docker.errors.ImageNotFound:
             pass
         if not image_exists:
@@ -447,7 +441,7 @@ def build_instance_image(
 
     # Check that the env. image the instance image is based on exists
     try:
-        env_image = client.images.get(env_image_name)
+        client.images.get(env_image_name)
     except docker.errors.ImageNotFound as e:
         raise BuildImageError(
             test_spec.instance_id,
@@ -462,13 +456,8 @@ def build_instance_image(
     # Check if the instance image already exists
     image_exists = False
     try:
-        instance_image = client.images.get(image_name)
-        if instance_image.attrs["Created"] < env_image.attrs["Created"]:
-            # the environment image is newer than the instance image, meaning the instance image may be outdated
-            remove_image(client, image_name, "quiet")
-            image_exists = False
-        else:
-            image_exists = True
+        client.images.get(image_name)
+        image_exists = True
     except docker.errors.ImageNotFound:
         pass
 
@@ -520,7 +509,7 @@ def build_container(
     try:
         # Get configurations for how container should be created
         config = MAP_REPO_VERSION_TO_SPECS[test_spec.repo][test_spec.version]
-        user = "root" if not config.get("execute_test_as_nonroot", False) else "nonroot"
+        user = DOCKER_USER if not config.get("execute_test_as_nonroot", False) else "nonroot"
         nano_cpus = config.get("nano_cpus")
 
         # Create the container

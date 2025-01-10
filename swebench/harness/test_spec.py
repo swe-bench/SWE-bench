@@ -16,6 +16,7 @@ from swebench.harness.constants import (
     MAP_REPO_TO_INSTALL,
     MAP_REPO_VERSION_TO_SPECS,
     USE_X86,
+    UTF8,
 )
 from swebench.harness.dockerfiles import (
     get_dockerfile_base,
@@ -72,7 +73,7 @@ class TestSpec:
         Note that old images are not automatically deleted, so consider cleaning up old images periodically.
         """
         hash_object = hashlib.sha256()
-        hash_object.update(str(self.env_script_list).encode("utf-8"))
+        hash_object.update(str(self.env_script_list).encode(UTF8))
         hash_value = hash_object.hexdigest()
         val = hash_value[:22]  # 22 characters is still very likely to be unique
         return f"sweb.env.{self.arch}.{val}:latest"
@@ -155,7 +156,7 @@ def replace_uninstallable_packages_requirements_txt(requirement_str: str) -> str
         # See https://github.com/princeton-nlp/SWE-bench/issues/199
         # This package was sinced yanked, so we need to force pip
         # to install it.
-        # "types-pkg_resources": "types-pkg-resources==0.1.3",
+        "types-pkg_resources": "types-pkg-resources==0.1.3",
     }
     requirements = [req.strip() for req in requirement_str.split("\n") if req.strip()]
     requirements_replaced = []
