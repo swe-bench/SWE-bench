@@ -151,8 +151,8 @@ def make_test_spec(
     repo = instance["repo"]
     version = instance.get("version")
     base_commit = instance["base_commit"]
-    problem_statement = instance["problem_statement"]
-    hints_text = instance["hints_text"]  # Unused
+    problem_statement = instance.get("problem_statement")
+    hints_text = instance.get("hints_text")  # Unused
     test_patch = instance["test_patch"]
 
     def _from_json_or_obj(key: str) -> Any:
