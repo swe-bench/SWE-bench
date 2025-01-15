@@ -75,7 +75,7 @@ class ModalSandboxRuntime:
             timeout=timeout,
             cpu=4,
             mounts=[
-                modal.Mount.from_local_file(
+                self.image.add_local_file(
                     REMOTE_SANDBOX_ENTRYPOINT_PATH,
                     REMOTE_SANDBOX_ENTRYPOINT_PATH,
                 )
@@ -305,7 +305,7 @@ def get_log_dir(pred: dict, run_id: str, instance_id: str) -> Path:
 @app.function(
     image=swebench_image,
     mounts=[
-        modal.Mount.from_local_file(
+        swebench_image.add_local_file(
             LOCAL_SANDBOX_ENTRYPOINT_PATH,
             REMOTE_SANDBOX_ENTRYPOINT_PATH,
         )
