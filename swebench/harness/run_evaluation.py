@@ -550,15 +550,6 @@ def main(
     predictions = get_predictions_from_file(predictions_path, dataset_name, split)
     predictions = {pred[KEY_INSTANCE_ID]: pred for pred in predictions}
 
-    if modal:
-        # run instances on Modal
-        if not dataset:
-            print("No instances to run.")
-        else:
-            validate_modal_credentials()
-            run_instances_modal(predictions, dataset, full_dataset, run_id, timeout)
-        return
-
     # get dataset from predictions
     dataset = get_dataset_from_preds(dataset_name, split, instance_ids, predictions, run_id, rewrite_reports)
     full_dataset = load_swebench_dataset(dataset_name, split, instance_ids)
