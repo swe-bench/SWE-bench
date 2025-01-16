@@ -71,15 +71,12 @@ class ModalSandboxRuntime:
             timeout = 60 * 30
 
         return modal.Sandbox.create(
-            image=self.image,
+            image=self.image.add_local_file(
+                REMOTE_SANDBOX_ENTRYPOINT_PATH,
+                REMOTE_SANDBOX_ENTRYPOINT_PATH,
+            ),
             timeout=timeout,
             cpu=4,
-            mounts=[
-                self.image.add_local_file(
-                    REMOTE_SANDBOX_ENTRYPOINT_PATH,
-                    REMOTE_SANDBOX_ENTRYPOINT_PATH,
-                )
-            ],
         )
     
     async def _read_stream(self, stream: modal.io_streams.StreamReader, output_list: list[str]):
@@ -303,13 +300,10 @@ def get_log_dir(pred: dict, run_id: str, instance_id: str) -> Path:
     return RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
 
 @app.function(
-    image=swebench_image,
-    mounts=[
-        swebench_image.add_local_file(
-            LOCAL_SANDBOX_ENTRYPOINT_PATH,
-            REMOTE_SANDBOX_ENTRYPOINT_PATH,
-        )
-    ],
+    image=swebench_image.add_local_file(
+        LOCAL_SANDBOX_ENTRYPOINT_PATH,
+        REMOTE_SANDBOX_ENTRYPOINT_PATH,
+    ),
     timeout=120*60, # Much larger than default timeout to account for image build time
 )
 def run_instance_modal(
