@@ -66,6 +66,37 @@ def extract_fields(instance):
     return {**instance, "text": text_inputs, "patch": patch}
 
 
+def validate_arguments(push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k):
+    """Validate command line arguments and environment setup."""
+    if push_to_hub_user is not None:
+        hub_token = os.environ.get("HUGGING_FACE_HUB_TOKEN", None)
+        assert hub_token is not None, "Must provide HUGGING_FACE_HUB_TOKEN to push to the Hub"
+        assert output_dir is None, "Cannot provide output_dir if pushing to the Hub"
+    if max_context_len is not None:
+        assert tokenizer_name is not None
+    if push_to_hub_user is None and not Path(output_dir).exists():
+        Path(output_dir).mkdir(parents=True)
+    if max_context_len is not None:
+        assert file_source not in {"all", "oracle"}, "Cannot use max_context_len with oracle or all file sources"
+        assert tokenizer_name is not None, "Must provide tokenizer_name if max_context_len is not None"
+    if k is not None:
+        assert file_source not in {"all", "oracle"}, "Cannot use max_context_len with oracle or all file sources"
+    return hub_token if push_to_hub_user is not None else None
+
+
+def construct_output_filename(dataset_name, prompt_style, file_source, k, max_context_len, tokenizer_name):
+    """Construct the output filename based on parameters."""
+    if dataset_name.startswith("princeton-nlp"):
+        dataset_name = dataset_name.split("/")[-1]
+    dataset_name = dataset_name.replace("/", "__")
+    output_file = f"{dataset_name}__{prompt_style}__fs-{file_source}"
+    if k is not None:
+        output_file += f"__k-{k}"
+    if max_context_len is not None:
+        output_file += f"__mcc-{max_context_len}-{tokenizer_name}"
+    return output_file
+
+
 def main(
     dataset_name_or_path,
     splits,
@@ -79,99 +110,100 @@ def main(
     tokenizer_name,
     push_to_hub_user,
 ):
-    if push_to_hub_user is not None:
-        hub_token = os.environ.get("HUGGING_FACE_HUB_TOKEN", None)
-        assert hub_token is not None, "Must provide HUGGING_FACE_HUB_TOKEN to push to the Hub"
-        assert output_dir is None, "Cannot provide output_dir if pushing to the Hub"
-    if max_context_len is not None:
-        assert tokenizer_name is not None
-    if push_to_hub_user is None and not Path(output_dir).exists():
-        Path(output_dir).mkdir(parents=True)
-    output_file = f"SWE-bench__{prompt_style}__fs-{file_source}"
-    if k is not None:
-        assert file_source not in {
-            "all",
-            "oracle",
-        }, "Cannot use max_context_len with oracle or all file sources"
-        output_file += f"__k-{k}"
-    if max_context_len is not None:
-        assert file_source not in {
-            "all",
-            "oracle",
-        }, "Cannot use max_context_len with oracle or all file sources"
-        assert (
-            tokenizer_name is not None
-        ), "Must provide tokenizer_name if max_context_len is not None"
-        output_file += f"__mcc-{max_context_len}-{tokenizer_name}"
+    # Validate arguments and setup
+    hub_token = validate_arguments(push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k)
+    output_file = construct_output_filename(dataset_name_or_path, prompt_style, file_source, k, max_context_len, tokenizer_name)
+    output_file = Path(output_dir, output_file)
     if push_to_hub_user is None:
-        output_file = Path(output_dir, output_file)
         if output_file.exists():
-            logger.info(f"{output_file.absolute().as_posix()} already exists. Aborting")
-            return
-        output_file = str(output_file)
-    if Path(dataset_name_or_path).exists():
-        dataset = load_from_disk(dataset_name_or_path)
-    else:
-        dataset = load_dataset(dataset_name_or_path)
+            existing_dataset = load_from_disk(output_file)
+            # if requested splits are in existing dataset, abort
+            for split in splits:
+                if split in existing_dataset:
+                    logger.info(f"{output_file.absolute().as_posix()} already exists for split {split}. Aborting")
+                    return
+            del existing_dataset  # don't store in memory
 
-    split_instances = dict()
+    # Load dataset
+    dataset = load_from_disk(dataset_name_or_path) if Path(dataset_name_or_path).exists() else load_dataset(dataset_name_or_path)
     logger.info(f'Found {set(dataset.keys())} splits')
     if set(splits) - set(dataset.keys()) != set():
         raise ValueError(f"Unknown splits {set(splits) - set(dataset.keys())}")
+
+    # Define columns for final dataset
+    columns = [
+        "instance_id", "text", "repo", "base_commit", "problem_statement",
+        "hints_text", "created_at", "patch", "test_patch", "version",
+        "FAIL_TO_PASS", "PASS_TO_PASS", "environment_setup_commit",
+    ]
+
+    # Process each split
+    split_data = {}
+    progress_files = {}
     for split in splits:
-        split_instances[split] = {x["instance_id"]: x for x in dataset[split]}
+        logger.info(f"Processing {split} split")
+        split_instances = {x["instance_id"]: x for x in dataset[split]}
+        progress_file = f"{output_file}.{split}.progress.jsonl"
+        progress_files[split] = progress_file
+        # Process instances and save to progress file
         add_text_inputs(
-            split_instances[split],
-            retrieval_file,
-            k,
-            prompt_style,
-            file_source,
+            split_instances,
+            retrieval_file=retrieval_file,
+            k=k,
+            prompt_style=prompt_style,
+            file_source=file_source,
             max_context_len=max_context_len,
             tokenizer_name=tokenizer_name,
+            progress_file=progress_file
         )
-    columns = [
-        "instance_id",
-        "text",
-        "repo",
-        "base_commit",
-        "problem_statement",
-        "hints_text",
-        "created_at",
-        "patch",
-        "test_patch",
-        "version",
-        "FAIL_TO_PASS",
-        "PASS_TO_PASS",
-        "environment_setup_commit",
-    ]
-    split_data = dict()
-    for split in split_instances:
-        split_data[split] = {key: list() for key in columns}
-        for instance in tqdm(
-            split_instances[split].values(), total=len(split_instances[split]), desc=f'Processing {split} instances',
-        ):
-            datum = extract_fields(instance)
-            if datum is None:
-                continue
-            for key in columns:
-                split_data[split][key].append(datum[key] if key in datum else "")
-        logger.info(f"Found {len(split_data[split]['instance_id'])} {split} ids")
-        split_data[split] = Dataset.from_dict(split_data[split])
-    dataset = DatasetDict(split_data)
-    if validation_ratio > 0 and "train" in dataset:
-        train_val = dataset["train"].train_test_split(
-            test_size=validation_ratio,
-            seed=42,
-        )
-        dataset["train"] = train_val["train"]
-        dataset["validation"] = train_val["test"]
-    for split in dataset:
-        logger.info(f"Found {len(dataset[split])} {split} instances")
-    if push_to_hub_user is not None:
-        dataset.push_to_hub(f'{push_to_hub_user}/{output_file}', use_auth_token=hub_token)
+
+    logger.info("Creating final dataset")
+    # Create final dataset
+    if output_file.exists():
+        final_dataset = load_from_disk(output_file)
     else:
-        dataset.save_to_disk(output_file)
-    logger.info(f"Finsihed saving to {output_file}")
+        final_dataset = DatasetDict()
+    for split in splits:
+        split_data = {key: [] for key in columns}
+        valid_instance_ids = set(dataset[split]["instance_id"])
+        invalid_instances = []
+        
+        with open(progress_files[split]) as f:
+            for line in f:
+                datum = json.loads(line)
+                if datum["instance_id"] not in valid_instance_ids:
+                    invalid_instances.append(datum["instance_id"])
+                    continue
+                for key in columns:
+                    split_data[key].append(datum.get(key, ""))
+                    
+        if invalid_instances:
+            logger.warning(f"Found {len(invalid_instances)} instances in progress file that are not in the {split} dataset: {invalid_instances}. These will be removed from the final dataset.")
+            
+        final_dataset[split] = Dataset.from_dict(split_data)
+
+    # Handle validation split
+    if validation_ratio > 0 and "train" in final_dataset:
+        train_val = final_dataset["train"].train_test_split(test_size=validation_ratio, seed=42)
+        final_dataset["train"] = train_val["train"]
+        final_dataset["validation"] = train_val["test"]
+
+    # Log final dataset sizes
+    for split in final_dataset:
+        logger.info(f"Found {len(final_dataset[split])} {split} instances")
+
+    # Save dataset
+    if push_to_hub_user is not None:
+        final_dataset.push_to_hub(f'{push_to_hub_user}/{output_file.name}', use_auth_token=hub_token)
+    else:
+        final_dataset.save_to_disk(output_file)
+    
+    # Cleanup progress files
+    for progress_file in progress_files.values():
+        if os.path.exists(progress_file):
+            os.remove(progress_file)
+            
+    logger.info(f"Finished saving to {output_file}")
 
 
 if __name__ == "__main__":
