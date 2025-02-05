@@ -262,7 +262,7 @@ def make_index(
         proc.kill()
         raise KeyboardInterrupt
     if proc.returncode == 130:
-        logger.warning(thread_prefix + f"Process killed by user")
+        logger.warning(thread_prefix + "Process killed by user")
         raise KeyboardInterrupt
     if proc.returncode != 0:
         logger.error(f"return code: {proc.returncode}")
@@ -340,7 +340,7 @@ def search(instance, index_path):
         for hit in hits:
             results["hits"].append({"docid": hit.docid, "score": hit.score})
         return results
-    except Exception as e:
+    except Exception:
         logger.error(f"Failed to process {instance_id}")
         logger.error(traceback.format_exc())
         return None

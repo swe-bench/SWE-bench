@@ -175,7 +175,7 @@ def main(
 ):
     if base_commit is not None and len(issue_url) != len(base_commit):
         raise ValueError(
-            f"Must provide either no base commits or one base commit per issue url"
+            "Must provide either no base commits or one base commit per issue url"
         )
     if base_commit is None:
         base_commit = [None] * len(issue_url)

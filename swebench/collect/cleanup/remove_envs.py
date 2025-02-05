@@ -93,4 +93,4 @@ if __name__ == "__main__":
         f"Removing miniconda folder for environments with {args.prefix} from {args.conda_path}"
     )
     delete_folders_with_prefix(args.prefix, args.conda_path)
-    print(f"Done!")
+    print("Done!")

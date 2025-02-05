@@ -14,7 +14,6 @@ from tqdm.auto import tqdm
 
 from swebench.inference.make_datasets.create_instance import add_text_inputs, PROMPT_FUNCTIONS
 from swebench.inference.make_datasets.tokenize_dataset import TOKENIZER_FUNCS
-from swebench.inference.make_datasets.utils import string_to_bool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -62,7 +61,7 @@ def extract_fields(instance):
     if text_inputs is None or instance["patch"] is None:
         print(f"No inputs for {instance_id}")
         return None
-    patch = "\n".join([f"<patch>", instance["patch"], "</patch>"])
+    patch = "\n".join(["<patch>", instance["patch"], "</patch>"])
     return {**instance, "text": text_inputs, "patch": patch}
 
 

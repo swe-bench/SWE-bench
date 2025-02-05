@@ -6,7 +6,6 @@ from swebench.harness.constants import (
     END_TEST_OUTPUT,
     MAP_REPO_VERSION_TO_SPECS,
     START_TEST_OUTPUT,
-    TEST_XVFB_PREFIX,
 )
 from swebench.harness.utils import get_modified_files
 from unidiff import PatchSet
@@ -89,7 +88,7 @@ def make_repo_script_list_js(specs, repo, repo_directory, base_commit, env_name)
         f"git reset --hard {base_commit}",
         f"chmod -R 777 {repo_directory}",  # So nonroot user can run tests
         # Remove the remote so the agent won't see newer commits.
-        f"git remote remove origin",
+        "git remote remove origin",
     ]
     if "install" in specs:
         setup_commands.extend(specs["install"])
@@ -120,7 +119,7 @@ def make_eval_script_list_js(instance, specs, env_name, repo_directory, base_com
     if test_files:
         reset_tests_command = f"git checkout {base_commit} {' '.join(test_files)}"
     else:
-        reset_tests_command = f'echo "No test files to reset"'
+        reset_tests_command = 'echo "No test files to reset"'
     
     apply_test_patch_command = (
         f"git apply --verbose --reject - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"

@@ -54,7 +54,7 @@ class Repo:
             try:
                 values = func(**kwargs)
                 return values
-            except HTTP403ForbiddenError as e:
+            except HTTP403ForbiddenError:
                 while True:
                     rl = self.api.rate_limit.get()
                     logger.info(
@@ -64,7 +64,7 @@ class Repo:
                     if rl.resources.core.remaining > 0:
                         break
                     time.sleep(60 * 5)
-            except HTTP404NotFoundError as e:
+            except HTTP404NotFoundError:
                 logger.info(f"[{self.owner}/{self.name}] Resource not found {kwargs}")
                 return None
 

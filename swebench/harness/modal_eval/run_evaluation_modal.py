@@ -253,7 +253,7 @@ def run_instance_modal(
         )
 
         if returncode != 0:
-            logger.info(f"Failed to apply patch to container, trying again...")
+            logger.info("Failed to apply patch to container, trying again...")
 
             apply_patch_output, returncode = runner.exec(
                 "cd /testbed && patch --batch --fuzz=5 -p1 -i /tmp/patch.diff",
@@ -311,7 +311,7 @@ def run_instance_modal(
         # Check if git diff changed after running eval script
         logger.info(f"Git diff after:\n{git_diff_output_after}")
         if git_diff_output_after != git_diff_output_before:
-            logger.info(f"Git diff changed after running eval script")
+            logger.info("Git diff changed after running eval script")
 
         # Get report from test output
         logger.info(f"Grading answer for {instance_id}...")
@@ -341,7 +341,7 @@ def run_instance_modal(
             f"Test timed out after {timeout} seconds.",
             logger,
         ) from e
-    except EvaluationError as e:
+    except EvaluationError:
         error_msg = traceback.format_exc()
         logger.info(error_msg)
         return TestOutput(

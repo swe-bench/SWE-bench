@@ -111,7 +111,7 @@ def run_sequential(func, args_list):
         try:
             func(*args)
             succeeded.append(args)
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             failed.append(args)
         pbar.update(1)

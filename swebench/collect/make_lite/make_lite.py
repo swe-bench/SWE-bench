@@ -5,7 +5,6 @@ from criteria import (
     contains_issue_reference,
     contains_non_modified_files,
     contains_pytest_match_arg,
-    leq_n_code_lines,
     leq_n_files,
     leq_n_hunks,
     leq_n_words,

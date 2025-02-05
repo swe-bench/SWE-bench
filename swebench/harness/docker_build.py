@@ -18,8 +18,7 @@ from swebench.harness.constants import (
 )
 from swebench.harness.docker_utils import (
     cleanup_container,
-    remove_image,
-    find_dependent_images
+    remove_image
 )
 from swebench.harness.test_spec.test_spec import (
     get_test_specs_from_dataset,

@@ -1,4 +1,7 @@
-import datetime, json, requests, sys
+import datetime
+import json
+import requests
+import sys
 from bs4 import BeautifulSoup
 
 sys.path.append("../../harness")

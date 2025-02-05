@@ -164,9 +164,9 @@ def prompt_style_2(instance):
     readmes_text = make_code_text(instance["readmes"])
     code_text = make_code_text(instance["file_contents"])
     instructions = (
-        f"I need you to solve this issue by generating a single patch file that I can apply "
-        + f"directly to this repository using git apply. Please respond with a single patch "
-        + f"file in the following format."
+        "I need you to solve this issue by generating a single patch file that I can apply "
+        + "directly to this repository using git apply. Please respond with a single patch "
+        + "file in the following format."
     )
     problem_statement = instance["problem_statement"]
     final_text = [
@@ -192,9 +192,9 @@ def prompt_style_2_edits_only(instance):
     readmes_text = make_code_text(instance["readmes"])
     code_text = make_code_text_edits_only(instance["file_contents"], instance["patch"])
     instructions = (
-        f"I need you to solve this issue by generating a single patch file that I can apply "
-        + f"directly to this repository using git apply. Please respond with a single patch "
-        + f"file in the following format."
+        "I need you to solve this issue by generating a single patch file that I can apply "
+        + "directly to this repository using git apply. Please respond with a single patch "
+        + "file in the following format."
     )
     problem_statement = instance["problem_statement"]
     final_text = [
@@ -220,14 +220,14 @@ def prompt_style_3(instance):
     readmes_text = make_code_text(instance["readmes"])
     code_text = make_code_text(instance["file_contents"])
     example_explanation = (
-        f"Here is an example of a patch file. It consists of changes to the code base. "
-        + f"It specifies the file names, the line numbers of each change, and the removed and added lines. "
-        + f"A single patch file can contain changes to multiple files."
+        "Here is an example of a patch file. It consists of changes to the code base. "
+        + "It specifies the file names, the line numbers of each change, and the removed and added lines. "
+        + "A single patch file can contain changes to multiple files."
     )
     final_instruction = (
-        f"I need you to solve the provided issue by generating a single patch file that I can apply "
-        + f"directly to this repository using git apply. Please respond with a single patch "
-        + f"file in the format shown above."
+        "I need you to solve the provided issue by generating a single patch file that I can apply "
+        + "directly to this repository using git apply. Please respond with a single patch "
+        + "file in the format shown above."
     )
     problem_statement = instance["problem_statement"]
     final_text = [
@@ -258,9 +258,9 @@ def full_file_gen(instance):
     readmes_text = make_code_text(instance["readmes"], add_line_numbers=False)
     code_text = make_code_text(instance["file_contents"], add_line_numbers=False)
     instructions = (
-        f"I need you to solve this issue by regenerating the full files in the code base that you would like to change. "
-        + f"You can change as many files as you like. "
-        + f"Please respond with a list of files and their revised contents in the following format."
+        "I need you to solve this issue by regenerating the full files in the code base that you would like to change. "
+        + "You can change as many files as you like. "
+        + "Please respond with a list of files and their revised contents in the following format."
     )
     problem_statement = instance["problem_statement"]
     final_text = [

@@ -2,7 +2,8 @@
 
 """Script to collect pull requests and convert them to candidate task instances"""
 
-import argparse, os
+import argparse
+import os
 import traceback
 
 from dotenv import load_dotenv

@@ -199,7 +199,7 @@ def run_instance(
         # Check if git diff changed after running eval script
         logger.info(f"Git diff after:\n{git_diff_output_after}")
         if git_diff_output_after != git_diff_output_before:
-            logger.info(f"Git diff changed after running eval script")
+            logger.info("Git diff changed after running eval script")
 
         # Get report from test output
         logger.info(f"Grading answer for {instance_id}...")

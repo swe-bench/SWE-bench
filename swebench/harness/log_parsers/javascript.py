@@ -1,8 +1,6 @@
-import json
 import re
 
 from swebench.harness.constants import (
-    MAP_REPO_VERSION_TO_SPECS,
     TestStatus,
 )
 from swebench.harness.test_spec.test_spec import TestSpec

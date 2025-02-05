@@ -14,7 +14,6 @@ from transformers import (
     StoppingCriteria,
     StoppingCriteriaList,
 )
-from pathlib import Path
 from swebench.inference.llamao.modeling_flash_llama import LlamaForCausalLM as AutoModelForCausalLM
 from swebench.inference.make_datasets.utils import extract_diff
 
@@ -135,7 +134,7 @@ def load_model(model_name_or_path, peft_path):
         torch_dtype=torch.bfloat16,
     ).eval()
     if peft_path is None:
-        logger.info(f"No PEFT adapters to load")
+        logger.info("No PEFT adapters to load")
         return model
     logger.info(f"Loading PEFT adapters from {peft_path}")
     model = PeftModel.from_pretrained(
@@ -267,7 +266,7 @@ def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_
     stopping_criteria = StoppingCriteriaList([RepeatingTokensCriteria()])
     fail_count = 0
     with torch.no_grad():
-        for ix, instance in enumerate(tqdm(dataset, desc=f"Generating patches")):
+        for ix, instance in enumerate(tqdm(dataset, desc="Generating patches")):
             try:
                 input_ids = instance["input_ids"]
                 input_ids = torch.tensor(
@@ -394,7 +393,7 @@ def main(
             model_name_or_path=model_name_or_path,
             peft_path=peft_path,
         )
-    logger.info(f"Done")
+    logger.info("Done")
 
 
 if __name__ == "__main__":

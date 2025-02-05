@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-import os, json
+import os
+import json
 import argparse
 
 from bs4 import BeautifulSoup
