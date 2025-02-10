@@ -11,6 +11,7 @@ TEST_PYTEST_VERBOSE = "pytest -rA --tb=long"
 TEST_SPHINX = "tox --current-env -epy39 -v --"
 TEST_SYMPY = "PYTHONWARNINGS='ignore::UserWarning,ignore::SyntaxWarning' bin/test -C --verbose"
 TEST_SYMPY_VERBOSE = "bin/test -C --verbose"
+TEST_GYT = "python3.11 -m unittest test_calculator.py"
 
 
 # Constants - Installation Specifications
@@ -585,6 +586,14 @@ for k in ["4.1", "4.2", "4.3", "5.0", "5.1", "5.2", "v5.3"]:
 for k in ["v5.3"]:
     SPECS_ASTROPY[k]["python"] = "3.10"
 
+SPECS_GYT = {
+    k: {
+        "python": "3.11",
+        "test_cmd": TEST_GYT,
+    }
+    for k in ["0.1", "1.0"]
+}
+
 SPECS_SYMPY = {
     k: {
         "python": "3.9",
@@ -890,6 +899,7 @@ MAP_REPO_VERSION_TO_SPECS_PY = {
     "sqlfluff/sqlfluff": SPECS_SQLFLUFF,
     "swe-bench/humaneval": SPECS_HUMANEVAL,
     "sympy/sympy": SPECS_SYMPY,
+    "yutg/gytpy1": SPECS_GYT,
 }
 
 # Constants - Repository Specific Installation Instructions
