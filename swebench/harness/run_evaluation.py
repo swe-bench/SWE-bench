@@ -411,6 +411,8 @@ def main(
     """
     Run evaluation harness for the given dataset and predictions.
     """
+    namespace = None if namespace == "" else namespace
+    
     if dataset_name == "princeton-nlp/SWE-bench_Multimodal" and split == "test":
         print(
             "⚠️ Local evaluation for the test split of SWE-bench Multimodal is not supported. "
