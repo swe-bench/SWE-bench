@@ -3,7 +3,7 @@ import re
 from swebench.harness.constants import TestStatus
 from swebench.harness.test_spec.test_spec import TestSpec
 from swebench.harness.log_parsers.utils import ansi_escape
-
+from collections import deque
 
 def parse_log_pytest(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
@@ -58,7 +58,7 @@ def parse_log_pytest_options(log: str, test_spec: TestSpec) -> dict[str, str]:
     return test_status_map
 
 
-def parse_log_django(log: str, test_spec: TestSpec) -> dict[str, str]:
+def parse_log_django(log: str) -> dict[str, str]:
     """
     Parser for test logs generated with Django tester framework
 
@@ -69,6 +69,12 @@ def parse_log_django(log: str, test_spec: TestSpec) -> dict[str, str]:
     """
     test_status_map = {}
     lines = log.split("\n")
+    # define some additional patterns to handle the two lines test output
+    pattern_sentence_fucntion = r".*? \.\.\. [a-zA-Z_]\w*\s\([\w.]+\)"
+    pattern_test = r"[a-zA-Z_]\w*\s\([\w.]+\)"
+
+    # initialize a queue to store the lines above the current line
+    previous_line = deque()
 
     prev_test = None
     for line in lines:
@@ -91,29 +97,84 @@ def parse_log_django(log: str, test_spec: TestSpec) -> dict[str, str]:
                 if line.strip().startswith("Applying sites.0002_alter_domain_unique...test_no_migrations"):
                     line = line.split("...", 1)[-1].strip()
                 test = line.rsplit(suffix, 1)[0]
+                if re.fullmatch(pattern_sentence_fucntion, test):
+                    test = test.split(" ... ")[-1]
+                # process with two lines test output
+                if not re.fullmatch(pattern_test, test):
+                    pt = -1
+                    while previous_line[pt]:
+                        if re.fullmatch(pattern_test, previous_line[pt]):
+                            test = previous_line[pt]
+                            break
+                        pt -= 1
                 test_status_map[test] = TestStatus.PASSED.value
                 break
         if " ... skipped" in line:
             test = line.split(" ... skipped")[0]
+            if re.fullmatch(pattern_sentence_fucntion, test):
+                test = test.split(" ... ")[-1]
+            if not re.fullmatch(pattern_test, test):
+                pt = -1
+                while previous_line[pt]:
+                    if re.fullmatch(pattern_test, previous_line[pt]):
+                        test = previous_line[pt]
+                        break
+                    pt -= 1
             test_status_map[test] = TestStatus.SKIPPED.value
         if line.endswith(" ... FAIL"):
             test = line.split(" ... FAIL")[0]
+            if re.fullmatch(pattern_sentence_fucntion, test):
+                test = test.split(" ... ")[-1]
+            if not re.fullmatch(pattern_test, test):
+                pt = -1
+                while previous_line[pt]:
+                    if re.fullmatch(pattern_test, previous_line[pt]):
+                        test = previous_line[pt]
+                        break
+                    pt -= 1
             test_status_map[test] = TestStatus.FAILED.value
         if line.startswith("FAIL:"):
-            test = line.split()[1].strip()
-            test_status_map[test] = TestStatus.FAILED.value
+            try:
+                test = re.findall(pattern_test, line)[-1]
+                test_status_map[test] = TestStatus.FAILED.value
+            except:
+                pass
         if line.endswith(" ... ERROR"):
             test = line.split(" ... ERROR")[0]
+            if re.fullmatch(pattern_sentence_fucntion, test):
+                test = test.split(" ... ")[-1]
+            if not re.fullmatch(pattern_test, test):
+                pt = -1
+                while previous_line[pt]:
+                    if re.fullmatch(pattern_test, previous_line[pt]):
+                        test = previous_line[pt]
+                        break
+                    pt -= 1
             test_status_map[test] = TestStatus.ERROR.value
         if line.startswith("ERROR:"):
-            test = line.split()[1].strip()
-            test_status_map[test] = TestStatus.ERROR.value
+            try:
+                test = re.findall(pattern_test, line)[-1]
+                test_status_map[test] = TestStatus.ERROR.value
+            except:
+                pass
 
         if line.lstrip().startswith("ok") and prev_test is not None:
             # It means the test passed, but there's some additional output (including new lines)
             # between "..." and "ok" message
-            test = prev_test
-            test_status_map[test] = TestStatus.PASSED.value
+            # test = prev_test
+            if not re.fullmatch(pattern_test, prev_test):
+                # pdb.set_trace()
+                pt = -1
+                while previous_line[pt]:
+                    if re.fullmatch(pattern_test, previous_line[pt]):
+                        prev_test = previous_line[pt]
+                        break
+                    pt -= 1
+            test_status_map[prev_test] = TestStatus.PASSED.value
+        
+        # record the last line to tacke the parsing for two lines test output
+        line_above = line
+        previous_line.append(line)
 
     # TODO: This is very brittle, we should do better
     # There's a bug in the django logger, such that sometimes a test output near the end gets
