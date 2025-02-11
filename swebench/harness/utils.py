@@ -60,14 +60,14 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
             predictions = [json.loads(line) for line in f]
     else:
         raise ValueError("Predictions path must be .json or .jsonl")
-    
+
     # Validate that each prediction has an instance_id
     for pred in predictions:
         if not isinstance(pred, dict):
             raise ValueError(f"Each prediction must be a dictionary, got {type(pred)}")
         if KEY_INSTANCE_ID not in pred:
             raise ValueError(f"Each prediction must contain '{KEY_INSTANCE_ID}'")
-    
+
     return predictions
 
 
@@ -128,8 +128,11 @@ def load_swebench_dataset(name="princeton-nlp/SWE-bench", split="test", instance
     if instance_ids:
         instance_ids = set(instance_ids)
     # Load from local .json/.jsonl file
-    if name.endswith(".json") or name.endswith(".jsonl"):
+    if name.endswith(".json"):
         dataset = json.loads(Path(name).read_text())
+        dataset_ids = {instance[KEY_INSTANCE_ID] for instance in dataset}
+    elif name.endswith(".jsonl"):
+        dataset = [json.loads(line) for line in Path(name).read_text().splitlines()]
         dataset_ids = {instance[KEY_INSTANCE_ID] for instance in dataset}
     else:
         # Load from Hugging Face Datasets
