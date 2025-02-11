@@ -41,6 +41,8 @@ class TestSpec:
     FAIL_TO_PASS: list[str]
     PASS_TO_PASS: list[str]
     language: str
+    # base_docker_specs contains configuration parameters passed to the base Dockerfile template
+    base_docker_specs: dict[str, str]
     docker_specs: dict
     namespace: str
     base_image_tag: str = LATEST
@@ -62,6 +64,16 @@ class TestSpec:
 
     @property
     def base_image_key(self):
+        """
+        If base_docker_specs are present, the base image key is includes a hash of the specs.
+        """
+        if self.base_docker_specs != {}:
+            hash_key = str(self.base_docker_specs)
+            hash_object = hashlib.sha256()
+            hash_object.update(hash_key.encode("utf-8"))
+            hash_value = hash_object.hexdigest()
+            val = hash_value[:10]  # 10 characters is still likely to be unique given only a few base images will be created
+            return f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}.{val}:{self.base_image_tag}"
         return f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}:{self.base_image_tag}"
 
     @property
@@ -87,7 +99,7 @@ class TestSpec:
         if self.is_remote_image:
             key = f"{self.namespace}/{key}".replace("__", "_1776_")
         return key
-    
+
     @property
     def is_remote_image(self):
         return self.namespace is not None
@@ -99,7 +111,7 @@ class TestSpec:
 
     @property
     def base_dockerfile(self):
-        return get_dockerfile_base(self.platform, self.arch, self.language)
+        return get_dockerfile_base(self.platform, self.arch, self.language, **self.base_docker_specs)
 
     @property
     def env_dockerfile(self):
@@ -170,6 +182,7 @@ def make_test_spec(
     env_name = "testbed"
     repo_directory = f"/{env_name}"
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
+    base_docker_specs = specs.get("base_docker_specs", {})
     docker_specs = specs.get("docker_specs", {})
 
     repo_script_list = make_repo_script_list(specs, repo, repo_directory, base_commit, env_name)
@@ -194,6 +207,7 @@ def make_test_spec(
         FAIL_TO_PASS=fail_to_pass,
         PASS_TO_PASS=pass_to_pass,
         language=MAP_REPO_TO_EXT[repo],
+        base_docker_specs=base_docker_specs,
         docker_specs=docker_specs,
         namespace=namespace,
         base_image_tag=base_image_tag,
