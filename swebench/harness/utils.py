@@ -288,6 +288,13 @@ def str2bool(v):
         raise ArgumentTypeError("Boolean value expected.")
 
 
+def str_or_none(value: str) -> str | None:
+    """Convert string 'none' to None, otherwise return the string."""
+    if value.lower() == 'none':
+        return None
+    return value
+
+
 def get_repo_file(repo, commit, filepath):
     url = f'https://raw.githubusercontent.com/{repo}/{commit}/{filepath}'
     try:

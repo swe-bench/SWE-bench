@@ -56,6 +56,7 @@ from swebench.harness.utils import (
     get_predictions_from_file,
     run_threadpool,
     str2bool,
+    str_or_none,
 )
 
 GIT_APPLY_CMDS = [
@@ -123,7 +124,7 @@ def run_instance(
             except:
                 # some error, idk why
                 pass
-    
+
     # Set up logger
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / LOG_INSTANCE
@@ -299,7 +300,7 @@ def run_instances(
             timeout,
             rewrite_reports,
         ))
-    
+
     # run instances in parallel
     print(f"Running {len(instances)} instances...")
     run_threadpool(run_instance, payloads, max_workers)
@@ -329,7 +330,7 @@ def get_dataset_from_preds(
         missing_preds = set(instance_ids) - set(predictions.keys())
         if missing_preds:
             print(f"Warning: Missing predictions for {len(missing_preds)} instance IDs.")
-    
+
     # check that all prediction IDs are in the dataset
     prediction_ids = set(predictions.keys())
     if prediction_ids - dataset_ids:
@@ -360,7 +361,7 @@ def get_dataset_from_preds(
                 test_output_ids.add(instance[KEY_INSTANCE_ID])
         dataset = [i for i in dataset if i[KEY_INSTANCE_ID] in prediction_ids and i[KEY_INSTANCE_ID] in test_output_ids]
         return dataset
-    
+
     # check which instance IDs have already been run
     completed_ids = set()
     for instance in dataset:
@@ -486,7 +487,7 @@ if __name__ == "__main__":
     # Common args
     parser.add_argument("--dataset_name", default="princeton-nlp/SWE-bench_Lite", type=str, help="Name of dataset or path to JSON file.")
     parser.add_argument("--split", type=str, default="test", help="Split of the dataset")
-    parser.add_argument( "--instance_ids", nargs="+", type=str, help="Instance IDs to run (space separated)")
+    parser.add_argument("--instance_ids", nargs="+", type=str, help="Instance IDs to run (space separated)")
     parser.add_argument("--predictions_path", type=str, help="Path to predictions file - if 'gold', uses gold predictions", required=True)
 
     # Local execution args
@@ -499,7 +500,7 @@ if __name__ == "__main__":
     # if clean is false, we only remove images above the cache level if they don't already exist
     parser.add_argument("--clean", type=str2bool, default=False, help="Clean images above cache level")
     parser.add_argument("--run_id", type=str, required=True, help="Run ID - identifies the run")
-    parser.add_argument("--namespace", type=str, default="swebench", help="Namespace for images")
+    parser.add_argument("--namespace", type=str_or_none, default="swebench", help="Namespace for images. Use 'none' to disable namespace for images to be built locally")
     parser.add_argument("--instance_image_tag", type=str, default='latest', help="Instance image tag")
     parser.add_argument("--rewrite_reports", type=str2bool, default=False, help="Doesn't run new instances, only writes reports for instances with existing test outputs")
     parser.add_argument("--report_dir", type=str, default=".", help="Directory to write reports to")
