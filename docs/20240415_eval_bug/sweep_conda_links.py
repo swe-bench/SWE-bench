@@ -60,4 +60,4 @@ for conda_link in conda_links:
     )
 
     # Clear testbed
-    subprocess.run(f"rm -rf /n/fs/p-swe-bench/testbed/*", shell=True)
+    subprocess.run("rm -rf /n/fs/p-swe-bench/testbed/*", shell=True)
