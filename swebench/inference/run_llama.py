@@ -14,13 +14,16 @@ from transformers import (
     StoppingCriteria,
     StoppingCriteriaList,
 )
-from swebench.inference.llamao.modeling_flash_llama import LlamaForCausalLM as AutoModelForCausalLM
+from swebench.inference.llamao.modeling_flash_llama import (
+    LlamaForCausalLM as AutoModelForCausalLM,
+)
 from swebench.inference.make_datasets.utils import extract_diff
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-DEVICE_MAPS = json.load(open(Path(__file__).parent / "codellama_device_maps.json")) 
+DEVICE_MAPS = json.load(open(Path(__file__).parent / "codellama_device_maps.json"))
+
 
 def get_output_file(
     output_dir,
@@ -71,7 +74,11 @@ def get_output_file(
         model_nickname = Path(peft_path).name
     elif Path(model_name_or_path).exists():
         if "checkpoint" in Path(model_name_or_path).name:
-            model_nickname = Path(model_name_or_path).parent.name + "__" + Path(model_name_or_path).name
+            model_nickname = (
+                Path(model_name_or_path).parent.name
+                + "__"
+                + Path(model_name_or_path).name
+            )
         else:
             model_nickname = Path(model_name_or_path).name
     else:
@@ -112,7 +119,7 @@ def load_model(model_name_or_path, peft_path):
     logger.info(f"Loading base model from {model_name_or_path}")
     max_memory = {
         **{
-            k: f"{torch.cuda.get_device_properties(k).total_memory//1_010_000_000:d}GIB"
+            k: f"{torch.cuda.get_device_properties(k).total_memory // 1_010_000_000:d}GIB"
             for k in range(torch.cuda.device_count())
         },
         "cpu": "20GIB",
@@ -154,7 +161,16 @@ def load_tokenizer(model_name_or_path):
 
 
 def load_data(
-    dataset_path, split, tokenizer, min_len, max_len, model_name_or_path, peft_path, existing_ids, shard_id, num_shards
+    dataset_path,
+    split,
+    tokenizer,
+    min_len,
+    max_len,
+    model_name_or_path,
+    peft_path,
+    existing_ids,
+    shard_id,
+    num_shards,
 ):
     """
     Load and preprocess the dataset for model inference.
@@ -227,7 +243,16 @@ def load_data(
     return dataset
 
 
-def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_or_path, peft_path):
+def generate(
+    model,
+    dataset,
+    tokenizer,
+    temperature,
+    top_p,
+    fileobj,
+    model_name_or_path,
+    peft_path,
+):
     class RepeatingTokensCriteria(StoppingCriteria):
         """
         Stopping criteria based on repeating tokens in the generated sequence.
@@ -258,7 +283,7 @@ def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_
                 return True
             if input_ids.shape[-1] < self.min_length:
                 return False
-            suffix = input_ids[0, -self.min_length:].cpu().tolist()
+            suffix = input_ids[0, -self.min_length :].cpu().tolist()
             if len(set(suffix)) <= self.min_tokens:
                 return True
             return False
@@ -277,7 +302,7 @@ def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_
                 output = model.generate(
                     input_ids=input_ids,
                     attention_mask=torch.ones_like(input_ids),
-                    temperature= 1.0 if temperature == 0 else temperature,
+                    temperature=1.0 if temperature == 0 else temperature,
                     top_p=top_p,
                     do_sample=False if temperature == 0 else True,
                     max_new_tokens=200,
@@ -287,8 +312,8 @@ def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_
                 output = output[0].cpu()[input_ids.shape[-1] :]
                 new_len = len(output)
                 logger.info(
-                    f"Generated {new_len} tokens ({total_len} total) in {(datetime.now() - start).total_seconds()} " + \
-                    f"seconds (speed: {new_len / (datetime.now() - start).total_seconds()} tps)"
+                    f"Generated {new_len} tokens ({total_len} total) in {(datetime.now() - start).total_seconds()} "
+                    + f"seconds (speed: {new_len / (datetime.now() - start).total_seconds()} tps)"
                 )
                 output = tokenizer.decode(output, skip_special_tokens=False)
                 logger.info(output[:200])
@@ -310,7 +335,9 @@ def generate(model, dataset, tokenizer, temperature, top_p, fileobj, model_name_
 
 
 def get_all_existing_ids(output_file):
-    stub_pattern = re.compile(r"((?:[\w\-\.]+)\_\_temp\-((\d+(\.\d+)?)|None)\_\_top\-p\-((\d+(\.\d+)?)|None))(\_\_|\.jsonl)")
+    stub_pattern = re.compile(
+        r"((?:[\w\-\.]+)\_\_temp\-((\d+(\.\d+)?)|None)\_\_top\-p\-((\d+(\.\d+)?)|None))(\_\_|\.jsonl)"
+    )
     match = stub_pattern.match(output_file.name)
     if not output_file.exists():
         return set()
@@ -398,16 +425,42 @@ def main(
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--model_name_or_path", type=str, required=True, help="Path to model or hf model name")
+    parser.add_argument(
+        "--model_name_or_path",
+        type=str,
+        required=True,
+        help="Path to model or hf model name",
+    )
     parser.add_argument("--peft_path", type=str, help="Path to PEFT adapters")
-    parser.add_argument("--dataset_path", type=str, required=True, help="Path to dataset or hf dataset name")
-    parser.add_argument("--split", type=str, default="test", help="Dataset split to use")
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        required=True,
+        help="Path to dataset or hf dataset name",
+    )
+    parser.add_argument(
+        "--split", type=str, default="test", help="Dataset split to use"
+    )
     parser.add_argument("--output_dir", type=str, default="./outputs")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top_p", type=float, default=1.0)
-    parser.add_argument("--min_len", type=int, default=None, help="Minimum length of input sequences to include")
-    parser.add_argument("--max_len", type=int, default=None, help="Maximum length of input sequences to include")
-    parser.add_argument("--shard_id", type=int, default=None, help="ID of the shard to load")
-    parser.add_argument("--num_shards", type=int, default=None, help="Total number of shards")
+    parser.add_argument(
+        "--min_len",
+        type=int,
+        default=None,
+        help="Minimum length of input sequences to include",
+    )
+    parser.add_argument(
+        "--max_len",
+        type=int,
+        default=None,
+        help="Maximum length of input sequences to include",
+    )
+    parser.add_argument(
+        "--shard_id", type=int, default=None, help="ID of the shard to load"
+    )
+    parser.add_argument(
+        "--num_shards", type=int, default=None, help="Total number of shards"
+    )
     args = parser.parse_args()
     main(**vars(args))

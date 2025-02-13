@@ -29,7 +29,8 @@ def test_passed(case: str, sm: dict[str, str]) -> bool:
 
 def test_failed(case: str, sm: dict[str, str]) -> bool:
     return case not in sm or any(
-        sm[case] == status for status in [TestStatus.FAILED.value, TestStatus.ERROR.value]
+        sm[case] == status
+        for status in [TestStatus.FAILED.value, TestStatus.ERROR.value]
     )
 
 
@@ -43,7 +44,7 @@ def get_logs_eval(test_spec: TestSpec, log_fp: str) -> tuple[dict[str, str], boo
     Returns:
         bool: whether the patch applied successfully
         dict: status map
-    
+
     TODO(john-b-yang): Check this is working properly...
     """
     repo = test_spec.repo
@@ -56,9 +57,17 @@ def get_logs_eval(test_spec: TestSpec, log_fp: str) -> tuple[dict[str, str], boo
     with open(log_fp) as f:
         content = f.read()
         # TODO fix constant here
-        bad_codes = list(filter(lambda x: x in content, [
-            APPLY_PATCH_FAIL, RESET_FAILED, TESTS_ERROR, TESTS_TIMEOUT,
-        ]))
+        bad_codes = list(
+            filter(
+                lambda x: x in content,
+                [
+                    APPLY_PATCH_FAIL,
+                    RESET_FAILED,
+                    TESTS_ERROR,
+                    TESTS_TIMEOUT,
+                ],
+            )
+        )
         if bad_codes:
             return {}, False
         elif not (START_TEST_OUTPUT in content and END_TEST_OUTPUT in content):
@@ -98,20 +107,26 @@ def get_eval_tests_report(
     - Fail-Fail (F2F) + P: Success (Extra Credit)
     - Pass-Fail (P2F) + P: Not considered
     """
+
     def check_pass_and_fail(test_case, eval_status_map, success, failed):
         if test_passed(test_case, eval_status_map):
             # Assume silent success for now (test case not in eval_sm)
             success.append(test_case)
         elif test_failed(test_case, eval_status_map):
             failed.append(test_case)
-    
+
     def check_fail_only(test_case, eval_status_map, success, failed):
-        if test_case in eval_status_map and eval_status_map[test_case] == TestStatus.FAILED.value:
+        if (
+            test_case in eval_status_map
+            and eval_status_map[test_case] == TestStatus.FAILED.value
+        ):
             failed.append(test_case)
         else:
             success.append(test_case)
-    
-    check_test_case = check_pass_and_fail if eval_type == EvalType.PASS_AND_FAIL else check_fail_only
+
+    check_test_case = (
+        check_pass_and_fail if eval_type == EvalType.PASS_AND_FAIL else check_fail_only
+    )
 
     # Calculate resolution metrics
     f2p_success = []
@@ -252,11 +267,13 @@ def get_eval_report(
         PASS_TO_PASS: test_spec.PASS_TO_PASS,
     }
 
-    report = get_eval_tests_report(eval_status_map, eval_ref, eval_type=get_eval_type(test_spec))
+    report = get_eval_tests_report(
+        eval_status_map, eval_ref, eval_type=get_eval_type(test_spec)
+    )
     if get_resolution_status(report) == ResolvedStatus.FULL.value:
         report_map[instance_id]["resolved"] = True
 
     if include_tests_status:
         report_map[instance_id]["tests_status"] = report  # type: ignore
-    
+
     return report_map

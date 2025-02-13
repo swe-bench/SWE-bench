@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-"""Provided a source (raw) directory and the final (eval) directory, create a training split by removing all instances that are in the final directory from the source directory.
-"""
+"""Provided a source (raw) directory and the final (eval) directory, create a training split by removing all instances that are in the final directory from the source directory."""
 
 import os
 import logging
@@ -53,9 +52,9 @@ def extract_fields(instance, tokenizer_name, tokenizer, tokenizer_func, eos_toke
             "\n" + patch, tokenizer
         )  # add newline to tokenize patch
         idx = label_ids.index(13)
-        assert (
-            idx <= 2
-        ), "Expected newline token id (13) to be one of the first three tokens"
+        assert idx <= 2, (
+            "Expected newline token id (13) to be one of the first three tokens"
+        )
         label_ids = label_ids[idx + 1 :]  # remove newline tokens
     else:
         label_ids = tokenizer_func(patch, tokenizer)
@@ -63,7 +62,13 @@ def extract_fields(instance, tokenizer_name, tokenizer, tokenizer_func, eos_toke
     cond_len = len(input_ids) - 1
     labels = [-100] * cond_len + label_ids
     assert len(inputs) == len(labels)
-    return {**instance, "input_ids": inputs, "labels": labels, "text": text_inputs, "patch": patch}
+    return {
+        **instance,
+        "input_ids": inputs,
+        "labels": labels,
+        "text": text_inputs,
+        "patch": patch,
+    }
 
 
 def extract_test_fields(instance, tokenizer_name, tokenizer, tokenizer_func, eos_token):
@@ -82,7 +87,13 @@ def extract_test_fields(instance, tokenizer_name, tokenizer, tokenizer_func, eos
     label_ids = tokenizer_func(patch, tokenizer)
     inputs = input_ids
     labels = label_ids
-    return {**instance, "input_ids": inputs, "labels": labels, "text": text_inputs, "patch": patch}
+    return {
+        **instance,
+        "input_ids": inputs,
+        "labels": labels,
+        "text": text_inputs,
+        "patch": patch,
+    }
 
 
 def add_columns_from_dict(dataset, dict_columns):
@@ -112,15 +123,19 @@ def main(
     if tokenizer_name is not None:
         tokenizer, tokenizer_func = TOKENIZER_FUNCS[tokenizer_name]
         eos_token = getattr(tokenizer, "eos_token", "")
-        if num_proc > 0 and tokenizer_name == 'cl100k':
-            logger.warning('cl100k tokenizer does not support multiprocessing. Ignoring num_proc')
+        if num_proc > 0 and tokenizer_name == "cl100k":
+            logger.warning(
+                "cl100k tokenizer does not support multiprocessing. Ignoring num_proc"
+            )
             num_proc = 0
 
     if Path(dataset_name_or_path).exists():
         dataset = load_from_disk(dataset_name_or_path)
     else:
         dataset = load_dataset(dataset_name_or_path)
-    dataset = dataset.filter(lambda x: len(x["text"]) <= 5_000_000)  # filter out superlong instances
+    dataset = dataset.filter(
+        lambda x: len(x["text"]) <= 5_000_000
+    )  # filter out superlong instances
     for split in dataset.keys():
         if split == "test":
             continue

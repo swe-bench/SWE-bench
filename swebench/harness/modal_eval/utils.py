@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 def validate_modal_credentials():
     """
     Validate that Modal credentials exist by checking for ~/.modal.toml file.

@@ -33,7 +33,9 @@ def copy_to_container(container: Container, src: Path, dst: Path):
     # temporary tar file
     tar_path = src.with_suffix(".tar")
     with tarfile.open(tar_path, "w") as tar:
-        tar.add(src, arcname=dst.name)  # use destination name, so after `put_archive`, name is correct
+        tar.add(
+            src, arcname=dst.name
+        )  # use destination name, so after `put_archive`, name is correct
 
     # get bytes for put_archive cmd
     with open(tar_path, "rb") as tar_file:
@@ -92,9 +94,7 @@ def remove_image(client, image_id, logger=None):
     except Exception as e:
         if raise_error:
             raise e
-        log_error(
-            f"Failed to remove image {image_id}: {e}\n" f"{traceback.format_exc()}"
-        )
+        log_error(f"Failed to remove image {image_id}: {e}\n{traceback.format_exc()}")
 
 
 def cleanup_container(client, container, logger):
@@ -172,7 +172,7 @@ def cleanup_container(client, container, logger):
         )
 
 
-def exec_run_with_timeout(container, cmd, timeout: int|None=60):
+def exec_run_with_timeout(container, cmd, timeout: int | None = 60):
     """
     Run a command in a container with a timeout.
 
@@ -182,7 +182,7 @@ def exec_run_with_timeout(container, cmd, timeout: int|None=60):
         timeout (int): Timeout in seconds.
     """
     # Local variables to store the result of executing the command
-    exec_result = b''
+    exec_result = b""
     exec_id = None
     exception = None
     timed_out = False
@@ -246,7 +246,7 @@ def find_dependent_images(client: docker.DockerClient, image_name: str):
         # Check if the base image is in this image's history
         history = image.history()
         for layer in history:
-            if layer['Id'] == base_image_id:
+            if layer["Id"] == base_image_id:
                 # If found, add this image to the dependent images list
                 tags = image.tags
                 dependent_images.append(tags[0] if tags else image.id)
@@ -264,11 +264,8 @@ def list_images(client: docker.DockerClient):
 
 
 def clean_images(
-        client: docker.DockerClient,
-        prior_images: set,
-        cache_level: str,
-        clean: bool
-    ):
+    client: docker.DockerClient, prior_images: set, cache_level: str, clean: bool
+):
     """
     Clean Docker images based on cache level and clean flag.
 
@@ -295,18 +292,13 @@ def clean_images(
     print(f"Removed {removed} images.")
 
 
-def should_remove(
-        image_name: str,
-        cache_level: str,
-        clean: bool,
-        prior_images: set
-    ):
+def should_remove(image_name: str, cache_level: str, clean: bool, prior_images: set):
     """
     Determine if an image should be removed based on cache level and clean flag.
     """
     existed_before = image_name in prior_images
-    if '/' in image_name:
-        image_name = image_name.split('/', 1)[-1]
+    if "/" in image_name:
+        image_name = image_name.split("/", 1)[-1]
     if image_name.startswith("sweb.base"):
         if cache_level in {"none"} and (clean or not existed_before):
             return True

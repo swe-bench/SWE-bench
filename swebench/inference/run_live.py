@@ -6,6 +6,7 @@ It clones the repository associated with the issue, builds a BM25 retrieval inde
 generates a prompt for the user to interact with the model. The output is saved to a
 specified directory.
 """
+
 import json
 import subprocess
 from pathlib import Path
@@ -15,7 +16,12 @@ import re
 import time
 from datetime import datetime
 from tqdm.auto import tqdm
-from swebench.inference.make_datasets.utils import ContextManager, string_to_bool, extract_diff, extract_minimal_patch
+from swebench.inference.make_datasets.utils import (
+    ContextManager,
+    string_to_bool,
+    extract_diff,
+    extract_minimal_patch,
+)
 from swebench.inference.make_datasets.create_instance import (
     PROMPT_FUNCTIONS,
     TOKENIZER_FUNCS,
@@ -103,9 +109,11 @@ def make_instance(
     logger.info(f"Cloning repo {owner}/{repo}")
     repo_dir = clone_repo(f"{owner}/{repo}", root_dir, token)
     if commit is None:
-        commit = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], cwd=repo_dir
-        ).decode("utf-8").strip()
+        commit = (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_dir)
+            .decode("utf-8")
+            .strip()
+        )
     logger.info(f"Building BM25 retrieval index for {owner}/{repo}@{commit}")
     index_dir = make_index(
         repo_dir=repo_dir,
@@ -181,7 +189,7 @@ def main(
         base_commit = [None] * len(issue_url)
     gh_token = os.environ.get("GITHUB_TOKEN", None)
     if gh_token is not None:
-        logger.warning(f'Using GitHub token: {"*" * 8}{gh_token[-4:]}')
+        logger.warning(f"Using GitHub token: {'*' * 8}{gh_token[-4:]}")
     gh = GhApi(token=gh_token)
     tokenizer, tokenizer_func = TOKENIZER_FUNCS["cl100k"]
     document_encoding_func = DOCUMENT_ENCODING_FUNCTIONS[document_encoding_func]
@@ -216,9 +224,12 @@ def main(
                 model_name, inputs, use_azure=False, temperature=0, top_p=1
             )
             completion = response.choices[0].message.content
-            logger.info(f'Generated {response.usage.completion_tokens} tokens in {(time.time() - start):.2f} seconds')
+            logger.info(
+                f"Generated {response.usage.completion_tokens} tokens in {(time.time() - start):.2f} seconds"
+            )
         else:
             from anthropic import Anthropic
+
             api_key = os.environ.get("ANTHROPIC_API_KEY", None)
             anthropic = Anthropic(api_key=api_key)
             response = call_anthropic(
@@ -240,7 +251,7 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
     output_file = Path(
         output_dir,
-        f'{model_name}__{prompt_style}__{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.jsonl',
+        f"{model_name}__{prompt_style}__{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.jsonl",
     )
     with open(output_file, "+a") as f:
         for output in outputs:

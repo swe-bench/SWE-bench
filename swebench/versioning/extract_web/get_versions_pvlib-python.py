@@ -7,9 +7,10 @@ from datetime import datetime
 
 sys.path.append("/n/fs/nlp-jy1682/swe-bench/public/harness")
 from utils import get_instances
+
 sys.path = sys.path[:-1]
 
-PATH_TASKS_PVLIB   = "<path to pvlib-python task instances>"
+PATH_TASKS_PVLIB = "<path to pvlib-python task instances>"
 PATH_TASKS_PVLIB_V = "<path to pvlib-python task instances with versions>"
 WEBPAGE = "https://pvlib-python.readthedocs.io/en/stable/whatsnew.html"
 PATTERN = r'<a class="reference internal nav-link" href="#(.*)">\n\s+v(.*)\n\s+<\/a>'
@@ -30,8 +31,8 @@ keep_major_minor = lambda x, sep: ".".join(x.strip().split(sep)[:2])
 times = []
 for match in matches:
     match_parts = match[1].split(" (")
-    version = '.'.join(match_parts[0].split('.')[:-1])
-    date = match_parts[1].strip(')').strip('(')
+    version = ".".join(match_parts[0].split(".")[:-1])
+    date = match_parts[1].strip(")").strip("(")
     date_obj = datetime.strptime(date, DATE_FORMAT)
     times.append((date_obj.strftime("%Y-%m-%d"), version))
 

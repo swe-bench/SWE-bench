@@ -46,28 +46,33 @@ def get_predictions_from_file(predictions_path: str, dataset_name: str, split: s
                 KEY_INSTANCE_ID: datum[KEY_INSTANCE_ID],
                 KEY_PREDICTION: datum["patch"],
                 KEY_MODEL: "gold",
-            } for datum in dataset
+            }
+            for datum in dataset
         ]
     if predictions_path.endswith(".json"):
         with open(predictions_path, "r") as f:
             predictions = json.load(f)
             if isinstance(predictions, dict):
-                predictions = list(predictions.values())  # compatible with SWE-agent predictions
+                predictions = list(
+                    predictions.values()
+                )  # compatible with SWE-agent predictions
             if not isinstance(predictions, list):
-                raise ValueError("Predictions must be a list[prediction] or a dictionary[instance_id: prediction]")
+                raise ValueError(
+                    "Predictions must be a list[prediction] or a dictionary[instance_id: prediction]"
+                )
     elif predictions_path.endswith(".jsonl"):
         with open(predictions_path, "r") as f:
             predictions = [json.loads(line) for line in f]
     else:
         raise ValueError("Predictions path must be .json or .jsonl")
-    
+
     # Validate that each prediction has an instance_id
     for pred in predictions:
         if not isinstance(pred, dict):
             raise ValueError(f"Each prediction must be a dictionary, got {type(pred)}")
         if KEY_INSTANCE_ID not in pred:
             raise ValueError(f"Each prediction must contain '{KEY_INSTANCE_ID}'")
-    
+
     return predictions
 
 
@@ -78,13 +83,7 @@ def run_threadpool(func, payloads, max_workers):
     with tqdm(total=len(payloads), smoothing=0) as pbar:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Create a future for running each instance
-            futures = {
-                executor.submit(
-                    func,
-                    *payload
-                ): payload
-                for payload in payloads
-            }
+            futures = {executor.submit(func, *payload): payload for payload in payloads}
             # Wait for each future to complete
             for future in as_completed(futures):
                 try:
@@ -97,7 +96,9 @@ def run_threadpool(func, payloads, max_workers):
                     failed.append(futures[future])
                     continue
                 pbar.update(1)
-                pbar.set_description(f"{len(succeeded)} ran successfully, {len(failed)} failed")
+                pbar.set_description(
+                    f"{len(succeeded)} ran successfully, {len(failed)} failed"
+                )
     return succeeded, failed
 
 
@@ -120,7 +121,9 @@ def run_sequential(func, args_list):
     return succeeded, failed
 
 
-def load_swebench_dataset(name="princeton-nlp/SWE-bench", split="test", instance_ids=None) -> list[SWEbenchInstance]:
+def load_swebench_dataset(
+    name="princeton-nlp/SWE-bench", split="test", instance_ids=None
+) -> list[SWEbenchInstance]:
     """
     Load SWE-bench dataset from Hugging Face Datasets or local .json/.jsonl file
     """
@@ -135,9 +138,15 @@ def load_swebench_dataset(name="princeton-nlp/SWE-bench", split="test", instance
         # Load from Hugging Face Datasets
         if name.lower() in {"swe-bench", "swebench", "swe_bench"}:
             name = "princeton-nlp/SWE-bench"
-        elif name.lower() in {"swe-bench-lite", "swebench-lite", "swe_bench_lite", "swe-bench_lite", "lite"}:
+        elif name.lower() in {
+            "swe-bench-lite",
+            "swebench-lite",
+            "swe_bench_lite",
+            "swe-bench_lite",
+            "lite",
+        }:
             name = "princeton-nlp/SWE-bench_Lite"
-        if (Path(name) / split / 'dataset_info.json').exists():
+        if (Path(name) / split / "dataset_info.json").exists():
             dataset = cast(Dataset, load_from_disk(Path(name) / split))
         else:
             dataset = cast(Dataset, load_dataset(name, split=split))
@@ -150,7 +159,11 @@ def load_swebench_dataset(name="princeton-nlp/SWE-bench", split="test", instance
                     f"\nMissing IDs:\n{' '.join(instance_ids - dataset_ids)}"
                 )
             )
-        dataset = [instance for instance in dataset if instance[KEY_INSTANCE_ID] in instance_ids]
+        dataset = [
+            instance
+            for instance in dataset
+            if instance[KEY_INSTANCE_ID] in instance_ids
+        ]
     return [cast(SWEbenchInstance, instance) for instance in dataset]
 
 
@@ -289,7 +302,7 @@ def str2bool(v):
 
 
 def get_repo_file(repo, commit, filepath):
-    url = f'https://raw.githubusercontent.com/{repo}/{commit}/{filepath}'
+    url = f"https://raw.githubusercontent.com/{repo}/{commit}/{filepath}"
     try:
         response = requests.get(url)
         if response.status_code == 200:
@@ -305,7 +318,7 @@ def get_modified_files(patch: str) -> list[str]:
     """
     source_files = []
     for file in PatchSet(patch):
-        if file.source_file != '/dev/null':
+        if file.source_file != "/dev/null":
             source_files.append(file.source_file)
-    source_files = [x[2:] for x in source_files if x.startswith('a/')]
+    source_files = [x[2:] for x in source_files if x.startswith("a/")]
     return source_files

@@ -19,33 +19,35 @@ api = GhApi(token=GITHUB_TOKEN)
 
 releases, i = [], 0
 while True:
-    temp = api.repos.list_releases('sqlfluff', 'sqlfluff', 100, i + 1)
+    temp = api.repos.list_releases("sqlfluff", "sqlfluff", 100, i + 1)
     releases.extend(temp)
     if len(temp) < 100:
         break
     i += 1
-pairs = [(x['name'], x['published_at']) for x in releases]
+pairs = [(x["name"], x["published_at"]) for x in releases]
+
 
 def process(x):
     """Extract version number from name"""
-    if x.startswith('SQLFluff '):
-        x = x[len('SQLFluff '):]
-    pattern = re.compile(r'\[[\d\.\w]*\] - \d*-\d*-\d*')
+    if x.startswith("SQLFluff "):
+        x = x[len("SQLFluff ") :]
+    pattern = re.compile(r"\[[\d\.\w]*\] - \d*-\d*-\d*")
     matches = pattern.findall(x)
     if len(matches) > 0:
-        parts = x.split(' - ')
-        version = parts[0].replace('[', '').replace(']', '')
-        version = version.rsplit('.', 1)[0]
+        parts = x.split(" - ")
+        version = parts[0].replace("[", "").replace("]", "")
+        version = version.rsplit(".", 1)[0]
         return (version, parts[1])
 
-    pattern = re.compile(r'\d\.\d\.[\d\.]*')
+    pattern = re.compile(r"\d\.\d\.[\d\.]*")
     matches = pattern.findall(x)
     if len(matches) > 0:
         version = matches[0]
-        version = version.rsplit('.', 1)[0]
+        version = version.rsplit(".", 1)[0]
         return (version, None)
 
     return (None, None)
+
 
 # Collect version/date pairs
 version_date_map = {}
@@ -54,14 +56,11 @@ for pair in pairs:
     if pair_rv[0] == None:
         continue
     version = pair_rv[0]
-    if version.startswith('Bugfix Release '):
-        version = version[len('Bugfix Release '):]
+    if version.startswith("Bugfix Release "):
+        version = version[len("Bugfix Release ") :]
     date = pair[1] if pair_rv[1] == None else pair_rv[1]
     if version in version_date_map:
-        version_date_map[version] = max(
-            version_date_map[version],
-            date
-        )
+        version_date_map[version] = max(version_date_map[version], date)
     else:
         version_date_map[version] = date
 
@@ -91,4 +90,4 @@ with open(
 
 # Print all versions
 versioned = json.load(open(os.path.join(PATH_TO_SAVE, versioned_path)))
-print(sorted(list({t['version'] for t in versioned if t['version'] is not None})))
+print(sorted(list({t["version"] for t in versioned if t["version"] is not None})))

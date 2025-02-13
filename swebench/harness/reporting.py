@@ -15,11 +15,11 @@ from swebench.harness.test_spec.test_spec import make_test_spec
 
 
 def make_run_report(
-        predictions: dict,
-        full_dataset: list,
-        run_id: str,
-        client: Optional[docker.DockerClient] = None,
-    ) -> Path:
+    predictions: dict,
+    full_dataset: list,
+    run_id: str,
+    client: Optional[docker.DockerClient] = None,
+) -> Path:
     """
     Make a final evaluation and run report of the instances that have been run.
     Also reports on images and containers that may still running if client is provided.
@@ -29,7 +29,7 @@ def make_run_report(
         full_dataset (list): List of all instances
         run_id (str): Run ID
         client (docker.DockerClient): Docker client (optional)
-    
+
     Returns:
         Path to report file
     """
@@ -121,11 +121,13 @@ def make_run_report(
         "schema_version": 2,
     }
     if not client:
-        report.update({
-            "unstopped_instances": len(unstopped_containers),
-            "unstopped_containers": list(sorted(unstopped_containers)),
-            "unremoved_images": list(sorted(unremoved_images)),
-        })
+        report.update(
+            {
+                "unstopped_instances": len(unstopped_containers),
+                "unstopped_containers": list(sorted(unstopped_containers)),
+                "unremoved_images": list(sorted(unremoved_images)),
+            }
+        )
     report_file = Path(
         list(predictions.values())[0][KEY_MODEL].replace("/", "__")
         + f".{run_id}"

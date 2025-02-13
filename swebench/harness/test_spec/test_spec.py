@@ -31,6 +31,7 @@ class TestSpec:
     """
     A dataclass that represents a test specification for a single instance of SWE-bench.
     """
+
     instance_id: str
     repo: str
     version: str
@@ -49,20 +50,31 @@ class TestSpec:
 
     @property
     def setup_env_script(self):
-        return "\n".join(["#!/bin/bash", "set -euxo pipefail"] + self.env_script_list) + "\n"
+        return (
+            "\n".join(["#!/bin/bash", "set -euxo pipefail"] + self.env_script_list)
+            + "\n"
+        )
 
     @property
     def eval_script(self):
-        return "\n".join(["#!/bin/bash", "set -uxo pipefail"] + self.eval_script_list) + "\n"
+        return (
+            "\n".join(["#!/bin/bash", "set -uxo pipefail"] + self.eval_script_list)
+            + "\n"
+        )
         # Don't exit early because we need to revert tests at the end
 
     @property
     def install_repo_script(self):
-        return "\n".join(["#!/bin/bash", "set -euxo pipefail"] + self.repo_script_list) + "\n"
+        return (
+            "\n".join(["#!/bin/bash", "set -euxo pipefail"] + self.repo_script_list)
+            + "\n"
+        )
 
     @property
     def base_image_key(self):
-        return f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}:{self.base_image_tag}"
+        return (
+            f"sweb.base.{MAP_REPO_TO_EXT[self.repo]}.{self.arch}:{self.base_image_tag}"
+        )
 
     @property
     def env_image_key(self):
@@ -87,7 +99,7 @@ class TestSpec:
         if self.is_remote_image:
             key = f"{self.namespace}/{key}".replace("__", "_1776_")
         return key
-    
+
     @property
     def is_remote_image(self):
         return self.namespace is not None
@@ -103,10 +115,12 @@ class TestSpec:
 
     @property
     def env_dockerfile(self):
-        return get_dockerfile_env(self.platform, self.arch, self.language, **{
-            **DEFAULT_DOCKER_SPECS,
-            **self.docker_specs
-        })
+        return get_dockerfile_env(
+            self.platform,
+            self.arch,
+            self.language,
+            **{**DEFAULT_DOCKER_SPECS, **self.docker_specs},
+        )
 
     @property
     def instance_dockerfile(self):
@@ -124,24 +138,29 @@ class TestSpec:
 
 def get_test_specs_from_dataset(
     dataset: Union[list[SWEbenchInstance], list[TestSpec]],
-    namespace: str=None,
-    instance_image_tag: str=LATEST,
+    namespace: str = None,
+    instance_image_tag: str = LATEST,
 ) -> list[TestSpec]:
     """
     Idempotent function that converts a list of SWEbenchInstance objects to a list of TestSpec objects.
     """
     if isinstance(dataset[0], TestSpec):
         return cast(list[TestSpec], dataset)
-    return list(map(lambda x: make_test_spec(x, namespace, instance_image_tag), cast(list[SWEbenchInstance], dataset)))
+    return list(
+        map(
+            lambda x: make_test_spec(x, namespace, instance_image_tag),
+            cast(list[SWEbenchInstance], dataset),
+        )
+    )
 
 
 def make_test_spec(
-        instance: SWEbenchInstance,
-        namespace: str=None,
-        base_image_tag: str=LATEST,
-        env_image_tag: str=LATEST,
-        instance_image_tag: str=LATEST,
-    ) -> TestSpec:
+    instance: SWEbenchInstance,
+    namespace: str = None,
+    base_image_tag: str = LATEST,
+    env_image_tag: str = LATEST,
+    instance_image_tag: str = LATEST,
+) -> TestSpec:
     if isinstance(instance, TestSpec):
         return instance
     assert base_image_tag is not None, "base_image_tag cannot be None"
@@ -172,7 +191,9 @@ def make_test_spec(
     specs = MAP_REPO_VERSION_TO_SPECS[repo][version]
     docker_specs = specs.get("docker_specs", {})
 
-    repo_script_list = make_repo_script_list(specs, repo, repo_directory, base_commit, env_name)
+    repo_script_list = make_repo_script_list(
+        specs, repo, repo_directory, base_commit, env_name
+    )
     env_script_list = make_env_script_list(instance, specs, env_name)
     eval_script_list = make_eval_script_list(
         instance, specs, env_name, repo_directory, base_commit, test_patch

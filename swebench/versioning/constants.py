@@ -51,6 +51,8 @@ MAP_REPO_TO_VERSION_PATTERNS.update(
     }
 )
 MAP_REPO_TO_VERSION_PATTERNS.update({k: [r"(.*)"] for k in ["Qiskit/qiskit"]})
-MAP_REPO_TO_VERSION_PATTERNS.update({k: [r"version_info = [\d]+,[\d\s]+,"] for k in ["pyvista/pyvista"]})
+MAP_REPO_TO_VERSION_PATTERNS.update(
+    {k: [r"version_info = [\d]+,[\d\s]+,"] for k in ["pyvista/pyvista"]}
+)
 
 SWE_BENCH_URL_RAW = "https://raw.githubusercontent.com/"

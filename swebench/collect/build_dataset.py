@@ -134,7 +134,9 @@ def main(pr_file: str, output: str, token: Optional[str] = None):
                     completed += 1
                     if has_test_patch(pr):
                         with_tests += 1
-    logger.info(f"Will skip {len(seen_prs)} pull requests that have already been inspected")
+    logger.info(
+        f"Will skip {len(seen_prs)} pull requests that have already been inspected"
+    )
 
     # Write to .all file for all PRs
     write_mode_all = "w" if not os.path.exists(all_output) else "a"
@@ -177,8 +179,12 @@ def main(pr_file: str, output: str, token: Optional[str] = None):
                         # If has test suite, write to output file
                         print(json.dumps(instance), end="\n", flush=True, file=output)
                         with_tests += 1
-    logger.info(f"[{', '.join(repos.keys())}] Total instances: {total_instances}, completed: {completed}, with tests: {with_tests}")
-    logger.info(f"[{', '.join(repos.keys())}] Skipped {len(seen_prs)} pull requests that have already been inspected")
+    logger.info(
+        f"[{', '.join(repos.keys())}] Total instances: {total_instances}, completed: {completed}, with tests: {with_tests}"
+    )
+    logger.info(
+        f"[{', '.join(repos.keys())}] Skipped {len(seen_prs)} pull requests that have already been inspected"
+    )
 
 
 if __name__ == "__main__":

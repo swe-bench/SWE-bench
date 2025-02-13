@@ -49,7 +49,9 @@ def remove_environment(env_name, prefix):
         conda_cmd = "conda remove -n " + env_name + " --all -y"
         cmd = conda_source + " && " + conda_cmd
         try:
-            conda_create_output = subprocess.run(cmd.split(), check=True, capture_output=True, text=True)
+            conda_create_output = subprocess.run(
+                cmd.split(), check=True, capture_output=True, text=True
+            )
         except subprocess.CalledProcessError as e:
             print(f"Error: {e}")
             print(f"Error output: {e.stderr}")
@@ -74,7 +76,9 @@ if __name__ == "__main__":
     conda_source = "source " + os.path.join(args.conda_path, "etc/profile.d/conda.sh")
     check_env = conda_source + " && " + "conda env list"
     try:
-        conda_envs = subprocess.run(check_env.split(" "), check=True, capture_output=True)
+        conda_envs = subprocess.run(
+            check_env.split(" "), check=True, capture_output=True
+        )
     except subprocess.CalledProcessError as e:
         print(f"Error: {e}")
         print(f"Error output: {e.stderr.decode('utf-8')}")

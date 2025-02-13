@@ -16,7 +16,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" PyTorch LLaMA model."""
+"""PyTorch LLaMA model."""
+
 from typing import Optional, Union, Any
 
 import torch
@@ -28,7 +29,11 @@ from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 import torch.distributed as dist
 
 from transformers.activations import ACT2FN
-from transformers.modeling_outputs import BaseModelOutputWithPast, CausalLMOutputWithPast, SequenceClassifierOutputWithPast
+from transformers.modeling_outputs import (
+    BaseModelOutputWithPast,
+    CausalLMOutputWithPast,
+    SequenceClassifierOutputWithPast,
+)
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from transformers.models.llama.configuration_llama import LlamaConfig
@@ -40,10 +45,13 @@ from flash_attn.bert_padding import unpad_input, pad_input
 try:
     from flash_attn.layers.rotary import apply_rotary_emb_func
 except ImportError:
-    raise ImportError('Please install RoPE kernels: `pip install git+https://github.com/HazyResearch/flash-attention.git#subdirectory=csrc/rotary`')
+    raise ImportError(
+        "Please install RoPE kernels: `pip install git+https://github.com/HazyResearch/flash-attention.git#subdirectory=csrc/rotary`"
+    )
 
 
 logger = logging.get_logger(__name__)
+
 
 # @torch.jit.script
 def rmsnorm_func(hidden_states, weight, variance_epsilon):
@@ -89,22 +97,30 @@ class FlashRotaryEmbedding(torch.nn.Module):
     Reference: https://github.com/sunyt32/torchscale/blob/main/torchscale/component/xpos_relative_position.py
     """
 
-    def __init__(self, dim: int, base=10000.0, interleaved=False, scale_base=None,
-                 scaling_factor=1.0, pos_idx_in_fp32=True, device=None):
+    def __init__(
+        self,
+        dim: int,
+        base=10000.0,
+        interleaved=False,
+        scale_base=None,
+        scaling_factor=1.0,
+        pos_idx_in_fp32=True,
+        device=None,
+    ):
         """
-            interleaved: if True, rotate pairs of even and odd dimensions (GPT-J style) instead
-                of 1st half and 2nd half (GPT-NeoX style).
-            pos_idx_in_fp32: if True, the position indices [0.0, ..., seqlen - 1] are in fp32,
-                otherwise they might be in lower precision.
-                This option was added because previously (before 2023-07-02), when we construct
-                the position indices, we use the dtype of self.inv_freq. In most cases this would
-                be fp32, but if the model is trained in pure bf16 (not mixed precision), then
-                self.inv_freq would be bf16, and the position indices are also in bf16.
-                Because of the limited precision of bf16 (e.g. 1995.0 is rounded to 2000.0), the
-                embeddings for some positions will coincide.
-                To maintain compatibility with models previously trained in pure bf16,
-                we add this option.
-            scaling_factor: RotaryEmbedding extended with linear scaling.
+        interleaved: if True, rotate pairs of even and odd dimensions (GPT-J style) instead
+            of 1st half and 2nd half (GPT-NeoX style).
+        pos_idx_in_fp32: if True, the position indices [0.0, ..., seqlen - 1] are in fp32,
+            otherwise they might be in lower precision.
+            This option was added because previously (before 2023-07-02), when we construct
+            the position indices, we use the dtype of self.inv_freq. In most cases this would
+            be fp32, but if the model is trained in pure bf16 (not mixed precision), then
+            self.inv_freq would be bf16, and the position indices are also in bf16.
+            Because of the limited precision of bf16 (e.g. 1995.0 is rounded to 2000.0), the
+            embeddings for some positions will coincide.
+            To maintain compatibility with models previously trained in pure bf16,
+            we add this option.
+        scaling_factor: RotaryEmbedding extended with linear scaling.
         """
         super().__init__()
         self.dim = dim
@@ -116,8 +132,12 @@ class FlashRotaryEmbedding(torch.nn.Module):
         self.interleaved = interleaved
         self.scale_base = scale_base
         self.scaling_factor = scaling_factor
-        scale = ((torch.arange(0, dim, 2, device=device, dtype=torch.float32) + 0.4 * dim)
-                 / (1.4 * dim) if scale_base is not None else None)
+        scale = (
+            (torch.arange(0, dim, 2, device=device, dtype=torch.float32) + 0.4 * dim)
+            / (1.4 * dim)
+            if scale_base is not None
+            else None
+        )
         self.register_buffer("scale", scale)
 
         self._seq_len_cached = 0
@@ -127,17 +147,24 @@ class FlashRotaryEmbedding(torch.nn.Module):
         self._sin_k_cached = None
 
     def _compute_inv_freq(self, device=None):
-        return 1 / (self.base ** (torch.arange(0, self.dim, 2, device=device,
-                                                 dtype=torch.float32) / self.dim))
-
+        return 1 / (
+            self.base
+            ** (
+                torch.arange(0, self.dim, 2, device=device, dtype=torch.float32)
+                / self.dim
+            )
+        )
 
     def _update_cos_sin_cache(self, seqlen, device=None, dtype=None):
         # Reset the tables if the sequence length has changed,
         # if we're on a new device (possibly due to tracing for instance),
         # or if we're switching from inference mode to training
-        if (seqlen > self._seq_len_cached or self._cos_cached.device != device
+        if (
+            seqlen > self._seq_len_cached
+            or self._cos_cached.device != device
             or self._cos_cached.dtype != dtype
-            or (self.training and self._cos_cached.is_inference())):
+            or (self.training and self._cos_cached.is_inference())
+        ):
             self._seq_len_cached = seqlen
             # We want fp32 here, not self.inv_freq.dtype, since the model could be loaded in bf16
             # And the output of arange can be quite large, so bf16 would lose a lot of precision.
@@ -164,8 +191,12 @@ class FlashRotaryEmbedding(torch.nn.Module):
                 self._cos_cached = torch.cos(freqs).to(dtype)
                 self._sin_cached = torch.sin(freqs).to(dtype)
             else:
-                power = ((torch.arange(seqlen, dtype=self.scale.dtype, device=self.scale.device)
-                          - seqlen // 2) / self.scale_base)
+                power = (
+                    torch.arange(
+                        seqlen, dtype=self.scale.dtype, device=self.scale.device
+                    )
+                    - seqlen // 2
+                ) / self.scale_base
                 scale = self.scale.to(device=power.device) ** power.unsqueeze(-1)
                 # We want the multiplication by scale to happen in fp32
                 self._cos_cached = (torch.cos(freqs) * scale).to(dtype)
@@ -173,10 +204,13 @@ class FlashRotaryEmbedding(torch.nn.Module):
                 self._cos_k_cached = (torch.cos(freqs) / scale).to(dtype)
                 self._sin_k_cached = (torch.sin(freqs) / scale).to(dtype)
 
-    def forward(self,
-                q: torch.Tensor, k: torch.Tensor,
-                seqlen_offset: int = 0,
-                unpadded_lengths: Optional[tuple[torch.Tensor]] = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        seqlen_offset: int = 0,
+        unpadded_lengths: Optional[tuple[torch.Tensor]] = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         q: (batch, seqlen, nheads, headdim)
         k: (batch, seqlen, nheads, headdim)
@@ -187,17 +221,30 @@ class FlashRotaryEmbedding(torch.nn.Module):
             cu_seqlens, max_seqlen = unpadded_lengths
         else:
             cu_seqlens, max_seqlen = None, q.shape[1]
-        self._update_cos_sin_cache(max_seqlen + seqlen_offset, device=q.device, dtype=q.dtype)
+        self._update_cos_sin_cache(
+            max_seqlen + seqlen_offset, device=q.device, dtype=q.dtype
+        )
 
         if self.scale is None:
-            return apply_rotary_emb_func(
-                q, self._cos_cached[seqlen_offset:], self._sin_cached[seqlen_offset:],
-                self.interleaved, True, # inplace=True,
-                cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
-            ), apply_rotary_emb_func(
-                k, self._cos_cached[seqlen_offset:], self._sin_cached[seqlen_offset:],
-                self.interleaved, True, # inplace=True
-                cu_seqlens=cu_seqlens, max_seqlen=max_seqlen
+            return (
+                apply_rotary_emb_func(
+                    q,
+                    self._cos_cached[seqlen_offset:],
+                    self._sin_cached[seqlen_offset:],
+                    self.interleaved,
+                    True,  # inplace=True,
+                    cu_seqlens=cu_seqlens,
+                    max_seqlen=max_seqlen,
+                ),
+                apply_rotary_emb_func(
+                    k,
+                    self._cos_cached[seqlen_offset:],
+                    self._sin_cached[seqlen_offset:],
+                    self.interleaved,
+                    True,  # inplace=True
+                    cu_seqlens=cu_seqlens,
+                    max_seqlen=max_seqlen,
+                ),
             )
         else:
             assert False
@@ -241,7 +288,9 @@ class LlamaAttention(nn.Module):
         self.hidden_size = config.hidden_size
         self.num_heads = config.num_attention_heads
         self.head_dim = self.hidden_size // self.num_heads
-        self.num_key_value_heads = getattr(config, "num_key_value_heads", self.num_heads)
+        self.num_key_value_heads = getattr(
+            config, "num_key_value_heads", self.num_heads
+        )
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
         self.max_position_embeddings = config.max_position_embeddings
 
@@ -250,14 +299,24 @@ class LlamaAttention(nn.Module):
                 f"hidden_size must be divisible by num_heads (got `hidden_size`: {self.hidden_size}"
                 f" and `num_heads`: {self.num_heads})."
             )
-        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=False)
-        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False)
-        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False)
-        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
+        self.q_proj = nn.Linear(
+            self.hidden_size, self.num_heads * self.head_dim, bias=False
+        )
+        self.k_proj = nn.Linear(
+            self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False
+        )
+        self.v_proj = nn.Linear(
+            self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False
+        )
+        self.o_proj = nn.Linear(
+            self.num_heads * self.head_dim, self.hidden_size, bias=False
+        )
 
         self.register_buffer(
             "norm_factor",
-            torch.sqrt(torch.tensor(self.head_dim, dtype=torch.float32)).to(torch.get_default_dtype()),
+            torch.sqrt(torch.tensor(self.head_dim, dtype=torch.float32)).to(
+                torch.get_default_dtype()
+            ),
             persistent=False,
         )
 
@@ -266,16 +325,23 @@ class LlamaAttention(nn.Module):
         else:
             scaling_type = self.config.rope_scaling["type"]
             scaling_factor = self.config.rope_scaling["factor"]
-            assert scaling_type == 'linear'
+            assert scaling_type == "linear"
         theta = getattr(self.config, "rope_theta", 10000)
         self.rotary_emb = FlashRotaryEmbedding(
-            self.head_dim, base=theta, interleaved=False, scaling_factor=scaling_factor,
+            self.head_dim,
+            base=theta,
+            interleaved=False,
+            scaling_factor=scaling_factor,
         )
 
         self.distributed_attn_func = DistributedAttention(flash_attn_kvpacked_func)
 
     def _shape(self, tensor: torch.Tensor, seq_len: int, bsz: int):
-        return tensor.view(bsz, seq_len, self.num_heads, self.head_dim).transpose(1, 2).contiguous()
+        return (
+            tensor.view(bsz, seq_len, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+            .contiguous()
+        )
 
     def forward(
         self,
@@ -317,26 +383,41 @@ class LlamaAttention(nn.Module):
 
         # Cache QKV values
         if has_layer_past:
-            new_len = past_len+q.size(1)
+            new_len = past_len + q.size(1)
             if new_len > past_kv.size(1):
-                past_kv = torch.cat([past_kv, torch.empty(hidden_states.size(0), 256, 2, kv.size(3), kv.size(4), dtype=kv.dtype, device=kv.device)], 1)
+                past_kv = torch.cat(
+                    [
+                        past_kv,
+                        torch.empty(
+                            hidden_states.size(0),
+                            256,
+                            2,
+                            kv.size(3),
+                            kv.size(4),
+                            dtype=kv.dtype,
+                            device=kv.device,
+                        ),
+                    ],
+                    1,
+                )
             past_kv[:, past_len:new_len] = kv
             kv = past_kv[:, :new_len]
         else:
             past_kv = kv
 
-        past_key_value = (past_kv, past_len+q.size(1)) if use_cache else None
+        past_key_value = (past_kv, past_len + q.size(1)) if use_cache else None
 
         if dist.is_initialized() and dist.get_world_size(seq_parallel_group) > 1:
             # NOTE: we assume that padding tokens are at the end of the sequence and may ignore `attention_mask`
             assert output_attentions is False
             attn_outputs = self.distributed_attn_func(
-                q, kv,
+                q,
+                kv,
                 dropout_p=0.0,
-                softmax_scale=1.0/self.norm_factor,
+                softmax_scale=1.0 / self.norm_factor,
                 causal=True,
                 return_attn_probs=False,
-                group=seq_parallel_group
+                group=seq_parallel_group,
             )
         else:
             if unpadded_lengths is not None:
@@ -345,17 +426,23 @@ class LlamaAttention(nn.Module):
                 cu_seqlens, max_seqlen = unpadded_lengths
 
                 attn_outputs = flash_attn_varlen_kvpacked_func(
-                    q, kv,
-                    cu_seqlens, cu_seqlens,
-                    max_seqlen, max_seqlen,
-                    dropout_p=0.0, softmax_scale=1.0/self.norm_factor,
-                    causal=True, return_attn_probs=output_attentions
+                    q,
+                    kv,
+                    cu_seqlens,
+                    cu_seqlens,
+                    max_seqlen,
+                    max_seqlen,
+                    dropout_p=0.0,
+                    softmax_scale=1.0 / self.norm_factor,
+                    causal=True,
+                    return_attn_probs=output_attentions,
                 )
             else:
                 attn_outputs = flash_attn_kvpacked_func(
-                    q, kv,
+                    q,
+                    kv,
                     dropout_p=0.0,
-                    softmax_scale=1.0/self.norm_factor,
+                    softmax_scale=1.0 / self.norm_factor,
                     causal=True,
                     return_attn_probs=output_attentions,
                 )
@@ -379,7 +466,9 @@ class LlamaDecoderLayer(nn.Module):
         self.self_attn = LlamaAttention(config=config)
         self.mlp = LlamaMLP(config)
         self.input_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = LlamaRMSNorm(
+            config.hidden_size, eps=config.rms_norm_eps
+        )
         self._fsdp_wrap = True
 
     def forward(
@@ -392,7 +481,9 @@ class LlamaDecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         seq_parallel_group: Optional[Any] = None,
-    ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
+    ) -> tuple[
+        torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]
+    ]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
@@ -477,8 +568,12 @@ class LlamaModel(LlamaPreTrainedModel):
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
-        self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
-        self.layers = nn.ModuleList([LlamaDecoderLayer(config) for _ in range(config.num_hidden_layers)])
+        self.embed_tokens = nn.Embedding(
+            config.vocab_size, config.hidden_size, self.padding_idx
+        )
+        self.layers = nn.ModuleList(
+            [LlamaDecoderLayer(config) for _ in range(config.num_hidden_layers)]
+        )
         self.norm = LlamaRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
         self.gradient_checkpointing = False
@@ -504,23 +599,35 @@ class LlamaModel(LlamaPreTrainedModel):
         return_dict: Optional[bool] = None,
         seq_parallel_group: Optional[Any] = None,
     ) -> Union[tuple, BaseModelOutputWithPast]:
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
+        )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         # retrieve input_ids and inputs_embeds
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError("You cannot specify both decoder_input_ids and decoder_inputs_embeds at the same time")
+            raise ValueError(
+                "You cannot specify both decoder_input_ids and decoder_inputs_embeds at the same time"
+            )
         elif input_ids is not None:
             batch_size, seq_length = input_ids.shape
         elif inputs_embeds is not None:
             batch_size, seq_length, _ = inputs_embeds.shape
         else:
-            raise ValueError("You have to specify either decoder_input_ids or decoder_inputs_embeds")
+            raise ValueError(
+                "You have to specify either decoder_input_ids or decoder_inputs_embeds"
+            )
 
         # position_ids = None
 
@@ -540,9 +647,13 @@ class LlamaModel(LlamaPreTrainedModel):
         if (
             ((attention_mask is not None) and (not attention_mask.all().item()))
             and not use_cache
-            and not (dist.is_initialized() and dist.get_world_size(seq_parallel_group) > 1)
+            and not (
+                dist.is_initialized() and dist.get_world_size(seq_parallel_group) > 1
+            )
         ):
-            hidden_states, unpad_indices, cu_seqlens, max_seqlen = unpad_input(hidden_states, attention_mask)
+            hidden_states, unpad_indices, cu_seqlens, max_seqlen = unpad_input(
+                hidden_states, attention_mask
+            )
             unpadded_lengths = (cu_seqlens, max_seqlen)
         else:
             unpadded_lengths = None
@@ -555,11 +666,15 @@ class LlamaModel(LlamaPreTrainedModel):
         for idx, decoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 if unpadded_lengths is not None:
-                    all_hidden_states += (pad_input(hidden_states, unpad_indices, bsz, max_seqlen),)
+                    all_hidden_states += (
+                        pad_input(hidden_states, unpad_indices, bsz, max_seqlen),
+                    )
                 else:
                     all_hidden_states += (hidden_states,)
 
-            past_key_value = past_key_values[idx] if past_key_values is not None else None
+            past_key_value = (
+                past_key_values[idx] if past_key_values is not None else None
+            )
 
             if self.gradient_checkpointing and self.training:
                 layer_outputs = torch.utils.checkpoint.checkpoint(
@@ -571,7 +686,7 @@ class LlamaModel(LlamaPreTrainedModel):
                     unpadded_lengths,
                     output_attentions,
                     False,
-                    seq_parallel_group
+                    seq_parallel_group,
                 )
             else:
                 layer_outputs = decoder_layer(
@@ -603,7 +718,11 @@ class LlamaModel(LlamaPreTrainedModel):
 
         next_cache = next_decoder_cache if use_cache else None
         if not return_dict:
-            return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
+            return tuple(
+                v
+                for v in [hidden_states, next_cache, all_hidden_states, all_self_attns]
+                if v is not None
+            )
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
@@ -684,11 +803,19 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         "Hey, are you conscious? Can you talk to me?\nI'm not conscious, but I can talk to you."
         ```"""
 
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        output_attentions = (
+            output_attentions
+            if output_attentions is not None
+            else self.config.output_attentions
         )
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        output_hidden_states = (
+            output_hidden_states
+            if output_hidden_states is not None
+            else self.config.output_hidden_states
+        )
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs = self.model(
@@ -708,16 +835,21 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         loss = None
         if labels is not None:
             # Only compute loss on tokens that contribute to loss
-            valid_prediction = (labels != -100)
+            valid_prediction = labels != -100
             hidden_states_ = hidden_states[valid_prediction]
             logits = self.lm_head(hidden_states_).float()
 
             # NOTE: We don't shift the labels inside the model here!
             labels_ = labels[valid_prediction]
 
-            if avg_valid_labels_per_chunk is not None and avg_valid_labels_per_chunk > 0:
+            if (
+                avg_valid_labels_per_chunk is not None
+                and avg_valid_labels_per_chunk > 0
+            ):
                 # Don't take mean since this will give unequal weight to GPUs with unequal amount of padding
-                loss = F.cross_entropy(logits, labels_, reduction="mean") * (labels_.numel() / avg_valid_labels_per_chunk)
+                loss = F.cross_entropy(logits, labels_, reduction="mean") * (
+                    labels_.numel() / avg_valid_labels_per_chunk
+                )
                 if not valid_prediction.any():
                     loss.data = torch.zeros_like(loss)
             else:
@@ -738,7 +870,12 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         )
 
     def prepare_inputs_for_generation(
-        self, input_ids, past_key_values=None, attention_mask=None, inputs_embeds=None, **kwargs
+        self,
+        input_ids,
+        past_key_values=None,
+        attention_mask=None,
+        inputs_embeds=None,
+        **kwargs,
     ):
         if past_key_values:
             input_ids = input_ids[:, -1:]
@@ -755,7 +892,9 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
                 "past_key_values": past_key_values,
                 "use_cache": kwargs.get("use_cache"),
                 "attention_mask": attention_mask,
-                "unpadded_lengths": ((attention_mask is not None) and (not attention_mask.all().item())),
+                "unpadded_lengths": (
+                    (attention_mask is not None) and (not attention_mask.all().item())
+                ),
                 "seq_parallel_group": kwargs.get("seq_parallel_group"),
             }
         )
@@ -766,7 +905,10 @@ class LlamaForCausalLM(LlamaPreTrainedModel):
         reordered_past = ()
         for layer_past in past_key_values:
             reordered_past += (
-                tuple(past_state.index_select(0, beam_idx.to(past_state.device)) for past_state in layer_past),
+                tuple(
+                    past_state.index_select(0, beam_idx.to(past_state.device))
+                    for past_state in layer_past
+                ),
             )
         return reordered_past
 
@@ -806,7 +948,9 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
             `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
         """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         transformer_outputs = self.model(
             input_ids,
@@ -828,16 +972,22 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             batch_size = inputs_embeds.shape[0]
 
         if self.config.pad_token_id is None and batch_size != 1:
-            raise ValueError("Cannot handle batch sizes > 1 if no padding token is defined.")
+            raise ValueError(
+                "Cannot handle batch sizes > 1 if no padding token is defined."
+            )
         if self.config.pad_token_id is None:
             sequence_lengths = -1
         else:
             if input_ids is not None:
-                sequence_lengths = (torch.ne(input_ids, self.config.pad_token_id).sum(-1) - 1).to(logits.device)
+                sequence_lengths = (
+                    torch.ne(input_ids, self.config.pad_token_id).sum(-1) - 1
+                ).to(logits.device)
             else:
                 sequence_lengths = -1
 
-        pooled_logits = logits[torch.arange(batch_size, device=logits.device), sequence_lengths]
+        pooled_logits = logits[
+            torch.arange(batch_size, device=logits.device), sequence_lengths
+        ]
 
         loss = None
         if labels is not None:
@@ -845,7 +995,9 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
             if self.config.problem_type is None:
                 if self.num_labels == 1:
                     self.config.problem_type = "regression"
-                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                elif self.num_labels > 1 and (
+                    labels.dtype == torch.long or labels.dtype == torch.int
+                ):
                     self.config.problem_type = "single_label_classification"
                 else:
                     self.config.problem_type = "multi_label_classification"
@@ -858,7 +1010,9 @@ class LlamaForSequenceClassification(LlamaPreTrainedModel):
                     loss = loss_fct(pooled_logits, labels)
             elif self.config.problem_type == "single_label_classification":
                 loss_fct = CrossEntropyLoss()
-                loss = loss_fct(pooled_logits.view(-1, self.num_labels), labels.view(-1))
+                loss = loss_fct(
+                    pooled_logits.view(-1, self.num_labels), labels.view(-1)
+                )
             elif self.config.problem_type == "multi_label_classification":
                 loss_fct = BCEWithLogitsLoss()
                 loss = loss_fct(pooled_logits, labels)

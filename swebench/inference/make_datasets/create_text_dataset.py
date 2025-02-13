@@ -12,7 +12,10 @@ from pathlib import Path
 from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
-from swebench.inference.make_datasets.create_instance import add_text_inputs, PROMPT_FUNCTIONS
+from swebench.inference.make_datasets.create_instance import (
+    add_text_inputs,
+    PROMPT_FUNCTIONS,
+)
 from swebench.inference.make_datasets.tokenize_dataset import TOKENIZER_FUNCS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -65,25 +68,37 @@ def extract_fields(instance):
     return {**instance, "text": text_inputs, "patch": patch}
 
 
-def validate_arguments(push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k):
+def validate_arguments(
+    push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k
+):
     """Validate command line arguments and environment setup."""
     if push_to_hub_user is not None:
         hub_token = os.environ.get("HUGGING_FACE_HUB_TOKEN", None)
-        assert hub_token is not None, "Must provide HUGGING_FACE_HUB_TOKEN to push to the Hub"
+        assert hub_token is not None, (
+            "Must provide HUGGING_FACE_HUB_TOKEN to push to the Hub"
+        )
         assert output_dir is None, "Cannot provide output_dir if pushing to the Hub"
     if max_context_len is not None:
         assert tokenizer_name is not None
     if push_to_hub_user is None and not Path(output_dir).exists():
         Path(output_dir).mkdir(parents=True)
     if max_context_len is not None:
-        assert file_source not in {"all", "oracle"}, "Cannot use max_context_len with oracle or all file sources"
-        assert tokenizer_name is not None, "Must provide tokenizer_name if max_context_len is not None"
+        assert file_source not in {"all", "oracle"}, (
+            "Cannot use max_context_len with oracle or all file sources"
+        )
+        assert tokenizer_name is not None, (
+            "Must provide tokenizer_name if max_context_len is not None"
+        )
     if k is not None:
-        assert file_source not in {"all", "oracle"}, "Cannot use max_context_len with oracle or all file sources"
+        assert file_source not in {"all", "oracle"}, (
+            "Cannot use max_context_len with oracle or all file sources"
+        )
     return hub_token if push_to_hub_user is not None else None
 
 
-def construct_output_filename(dataset_name, prompt_style, file_source, k, max_context_len, tokenizer_name):
+def construct_output_filename(
+    dataset_name, prompt_style, file_source, k, max_context_len, tokenizer_name
+):
     """Construct the output filename based on parameters."""
     if dataset_name.startswith("princeton-nlp"):
         dataset_name = dataset_name.split("/")[-1]
@@ -110,8 +125,17 @@ def main(
     push_to_hub_user,
 ):
     # Validate arguments and setup
-    hub_token = validate_arguments(push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k)
-    output_file = construct_output_filename(dataset_name_or_path, prompt_style, file_source, k, max_context_len, tokenizer_name)
+    hub_token = validate_arguments(
+        push_to_hub_user, output_dir, max_context_len, tokenizer_name, file_source, k
+    )
+    output_file = construct_output_filename(
+        dataset_name_or_path,
+        prompt_style,
+        file_source,
+        k,
+        max_context_len,
+        tokenizer_name,
+    )
     output_file = Path(output_dir, output_file)
     if push_to_hub_user is None:
         if output_file.exists():
@@ -119,21 +143,37 @@ def main(
             # if requested splits are in existing dataset, abort
             for split in splits:
                 if split in existing_dataset:
-                    logger.info(f"{output_file.absolute().as_posix()} already exists for split {split}. Aborting")
+                    logger.info(
+                        f"{output_file.absolute().as_posix()} already exists for split {split}. Aborting"
+                    )
                     return
             del existing_dataset  # don't store in memory
 
     # Load dataset
-    dataset = load_from_disk(dataset_name_or_path) if Path(dataset_name_or_path).exists() else load_dataset(dataset_name_or_path)
-    logger.info(f'Found {set(dataset.keys())} splits')
+    dataset = (
+        load_from_disk(dataset_name_or_path)
+        if Path(dataset_name_or_path).exists()
+        else load_dataset(dataset_name_or_path)
+    )
+    logger.info(f"Found {set(dataset.keys())} splits")
     if set(splits) - set(dataset.keys()) != set():
         raise ValueError(f"Unknown splits {set(splits) - set(dataset.keys())}")
 
     # Define columns for final dataset
     columns = [
-        "instance_id", "text", "repo", "base_commit", "problem_statement",
-        "hints_text", "created_at", "patch", "test_patch", "version",
-        "FAIL_TO_PASS", "PASS_TO_PASS", "environment_setup_commit",
+        "instance_id",
+        "text",
+        "repo",
+        "base_commit",
+        "problem_statement",
+        "hints_text",
+        "created_at",
+        "patch",
+        "test_patch",
+        "version",
+        "FAIL_TO_PASS",
+        "PASS_TO_PASS",
+        "environment_setup_commit",
     ]
 
     # Process each split
@@ -153,7 +193,7 @@ def main(
             file_source=file_source,
             max_context_len=max_context_len,
             tokenizer_name=tokenizer_name,
-            progress_file=progress_file
+            progress_file=progress_file,
         )
 
     logger.info("Creating final dataset")
@@ -166,7 +206,7 @@ def main(
         split_data = {key: [] for key in columns}
         valid_instance_ids = set(dataset[split]["instance_id"])
         invalid_instances = []
-        
+
         with open(progress_files[split]) as f:
             for line in f:
                 datum = json.loads(line)
@@ -175,15 +215,19 @@ def main(
                     continue
                 for key in columns:
                     split_data[key].append(datum.get(key, ""))
-                    
+
         if invalid_instances:
-            logger.warning(f"Found {len(invalid_instances)} instances in progress file that are not in the {split} dataset: {invalid_instances}. These will be removed from the final dataset.")
-            
+            logger.warning(
+                f"Found {len(invalid_instances)} instances in progress file that are not in the {split} dataset: {invalid_instances}. These will be removed from the final dataset."
+            )
+
         final_dataset[split] = Dataset.from_dict(split_data)
 
     # Handle validation split
     if validation_ratio > 0 and "train" in final_dataset:
-        train_val = final_dataset["train"].train_test_split(test_size=validation_ratio, seed=42)
+        train_val = final_dataset["train"].train_test_split(
+            test_size=validation_ratio, seed=42
+        )
         final_dataset["train"] = train_val["train"]
         final_dataset["validation"] = train_val["test"]
 
@@ -193,15 +237,17 @@ def main(
 
     # Save dataset
     if push_to_hub_user is not None:
-        final_dataset.push_to_hub(f'{push_to_hub_user}/{output_file.name}', use_auth_token=hub_token)
+        final_dataset.push_to_hub(
+            f"{push_to_hub_user}/{output_file.name}", use_auth_token=hub_token
+        )
     else:
         final_dataset.save_to_disk(output_file)
-    
+
     # Cleanup progress files
     for progress_file in progress_files.values():
         if os.path.exists(progress_file):
             os.remove(progress_file)
-            
+
     logger.info(f"Finished saving to {output_file}")
 
 
@@ -225,9 +271,7 @@ if __name__ == "__main__":
         default=0.01,
         help="Ratio of the training set to use for validation.",
     )
-    parser.add_argument(
-        "--output_dir", type=str, help="Path to the output directory."
-    )
+    parser.add_argument("--output_dir", type=str, help="Path to the output directory.")
     parser.add_argument(
         "--retrieval_file",
         type=str,

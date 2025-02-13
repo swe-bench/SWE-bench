@@ -13,7 +13,7 @@ from unidiff import PatchSet
 
 # MARK: Test Command Creation Functions
 def get_test_cmds_calypso(instance) -> list:
-    test_paths = [x.path for x in PatchSet(instance['test_patch'])]
+    test_paths = [x.path for x in PatchSet(instance["test_patch"])]
     test_cmds = []
     for test_path in test_paths:
         if re.search(r"__snapshots__/(.*).js.snap$", test_path):
@@ -23,24 +23,42 @@ def get_test_cmds_calypso(instance) -> list:
         # Determine which testing script to use
         if any([test_path.startswith(x) for x in ["client", "packages"]]):
             pkg = test_path.split("/")[0]
-            if instance['version'] in [
-                '10.10.0', '10.12.0', '10.13.0',
-                '10.14.0', '10.15.2', '10.16.3'
+            if instance["version"] in [
+                "10.10.0",
+                "10.12.0",
+                "10.13.0",
+                "10.14.0",
+                "10.15.2",
+                "10.16.3",
             ]:
-                test_cmds.append(f"./node_modules/.bin/jest --verbose -c=test/{pkg}/jest.config.js '{test_path}'")
-            elif instance['version'] in [
-                '6.11.5', '8.9.1', '8.9.3', '8.9.4', '8.11.0', '8.11.2',
-                '10.4.1', '10.5.0', '10.6.0', '10.9.0',
+                test_cmds.append(
+                    f"./node_modules/.bin/jest --verbose -c=test/{pkg}/jest.config.js '{test_path}'"
+                )
+            elif instance["version"] in [
+                "6.11.5",
+                "8.9.1",
+                "8.9.3",
+                "8.9.4",
+                "8.11.0",
+                "8.11.2",
+                "10.4.1",
+                "10.5.0",
+                "10.6.0",
+                "10.9.0",
             ]:
-                test_cmds.append(f"./node_modules/.bin/jest --verbose -c=test/{pkg}/jest.config.json '{test_path}'")
+                test_cmds.append(
+                    f"./node_modules/.bin/jest --verbose -c=test/{pkg}/jest.config.json '{test_path}'"
+                )
             else:
                 test_cmds.append(f"npm run test-{pkg} --verbose '{test_path}'")
         elif any([test_path.startswith(x) for x in ["test/e2e"]]):
-            test_cmds.extend([
-                "cd test/e2e",
-                f"NODE_CONFIG_ENV=test npm run test {test_path}",
-                "cd ../..",
-            ])
+            test_cmds.extend(
+                [
+                    "cd test/e2e",
+                    f"NODE_CONFIG_ENV=test npm run test {test_path}",
+                    "cd ../..",
+                ]
+            )
 
     return test_cmds
 
@@ -53,11 +71,14 @@ MAP_REPO_TO_TEST_CMDS = {
 def get_test_cmds(instance) -> list:
     if instance["repo"] in MAP_REPO_TO_TEST_CMDS:
         return MAP_REPO_TO_TEST_CMDS[instance["repo"]](instance)
-    test_cmd = MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]]["test_cmd"]
+    test_cmd = MAP_REPO_VERSION_TO_SPECS[instance["repo"]][instance["version"]][
+        "test_cmd"
+    ]
     return [test_cmd] if isinstance(test_cmd, str) else test_cmd
 
 
 # MARK: Utility Functions
+
 
 def get_download_img_commands(instance) -> list:
     cmds = []
@@ -77,7 +98,10 @@ def get_download_img_commands(instance) -> list:
 
 # MARK: Script Creation Functions
 
-def make_repo_script_list_js(specs, repo, repo_directory, base_commit, env_name) -> list:
+
+def make_repo_script_list_js(
+    specs, repo, repo_directory, base_commit, env_name
+) -> list:
     """
     Create a list of bash commands to set up the repository for testing.
     This is the setup script for the instance image.
@@ -104,12 +128,14 @@ def make_env_script_list_js(instance, specs, env_name) -> list:
     if "apt-pkgs" in specs:
         reqs_commands += [
             "apt-get update",
-            f"apt-get install -y {' '.join(specs['apt-pkgs'])}"
+            f"apt-get install -y {' '.join(specs['apt-pkgs'])}",
         ]
     return reqs_commands
 
 
-def make_eval_script_list_js(instance, specs, env_name, repo_directory, base_commit, test_patch) -> list:
+def make_eval_script_list_js(
+    instance, specs, env_name, repo_directory, base_commit, test_patch
+) -> list:
     """
     Applies the test patch and runs the tests.
     """
@@ -120,10 +146,8 @@ def make_eval_script_list_js(instance, specs, env_name, repo_directory, base_com
         reset_tests_command = f"git checkout {base_commit} {' '.join(test_files)}"
     else:
         reset_tests_command = 'echo "No test files to reset"'
-    
-    apply_test_patch_command = (
-        f"git apply --verbose --reject - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
-    )
+
+    apply_test_patch_command = f"git apply --verbose --reject - <<'{HEREDOC_DELIMITER}'\n{test_patch}\n{HEREDOC_DELIMITER}"
     test_commands = get_test_cmds(instance)
     eval_commands = [
         f"cd {repo_directory}",

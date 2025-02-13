@@ -9,6 +9,7 @@ INSTANCE_IMAGE_BUILD_DIR = Path("logs/build_images/instances")
 RUN_EVALUATION_LOG_DIR = Path("logs/run_evaluation")
 RUN_VALIDATION_LOG_DIR = Path("logs/run_validation")
 
+
 # Constants - Task Instance Class
 class SWEbenchInstance(TypedDict):
     repo: str
@@ -24,16 +25,19 @@ class SWEbenchInstance(TypedDict):
     PASS_TO_PASS: str
     environment_setup_commit: str
 
+
 # Constants - Test Types, Statuses, Commands
 FAIL_TO_PASS = "FAIL_TO_PASS"
 FAIL_TO_FAIL = "FAIL_TO_FAIL"
 PASS_TO_PASS = "PASS_TO_PASS"
 PASS_TO_FAIL = "PASS_TO_FAIL"
 
+
 class ResolvedStatus(Enum):
     NO = "RESOLVED_NO"
     PARTIAL = "RESOLVED_PARTIAL"
     FULL = "RESOLVED_FULL"
+
 
 class TestStatus(Enum):
     FAILED = "FAILED"
@@ -41,10 +45,12 @@ class TestStatus(Enum):
     SKIPPED = "SKIPPED"
     ERROR = "ERROR"
     XFAIL = "XFAIL"
-    
+
+
 class EvalType(Enum):
     PASS_AND_FAIL = "pass_and_fail"
     FAIL_ONLY = "fail_only"
+
 
 # Constants - Evaluation Keys
 KEY_INSTANCE_ID = "instance_id"
@@ -74,6 +80,7 @@ TESTS_TIMEOUT = ">>>>> Tests Timed Out"
 START_TEST_OUTPUT = ">>>>> Start Test Output"
 END_TEST_OUTPUT = ">>>>> End Test Output"
 
+
 # Constants - Patch Types
 class PatchType(Enum):
     PATCH_GOLD = "gold"
@@ -85,6 +92,7 @@ class PatchType(Enum):
 
     def __str__(self):
         return self.value
+
 
 # Constants - Miscellaneous
 NON_TEST_EXTS = [

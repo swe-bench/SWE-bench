@@ -19,7 +19,9 @@ from swebench.harness.utils import EvaluationError
 from typing import cast
 
 SANDBOX_ENTRYPOINT = "run_evaluation_modal_entrypoint"
-LOCAL_SANDBOX_ENTRYPOINT_PATH = (Path(__file__).parent / f"{SANDBOX_ENTRYPOINT}.py").resolve()
+LOCAL_SANDBOX_ENTRYPOINT_PATH = (
+    Path(__file__).parent / f"{SANDBOX_ENTRYPOINT}.py"
+).resolve()
 REMOTE_SANDBOX_ENTRYPOINT_PATH = f"/root/{SANDBOX_ENTRYPOINT}.py"
 
 app = modal.App("swebench-evaluation")
@@ -45,11 +47,15 @@ class TestOutput:
     log_dir: Path
     errored: bool
 
+
 class ModalSandboxRuntime:
     """
     Runtime for running instances in a Modal Sandbox.
     """
-    def __init__(self, test_spec: TestSpec, timeout: int | None = None, verbose: bool = True):
+
+    def __init__(
+        self, test_spec: TestSpec, timeout: int | None = None, verbose: bool = True
+    ):
         self.test_spec = test_spec
         self.image = ModalSandboxRuntime.get_instance_image(test_spec)
         self.sandbox = self._get_sandbox(timeout)
@@ -78,8 +84,10 @@ class ModalSandboxRuntime:
             timeout=timeout,
             cpu=4,
         )
-    
-    async def _read_stream(self, stream: modal.io_streams.StreamReader, output_list: list[str]):
+
+    async def _read_stream(
+        self, stream: modal.io_streams.StreamReader, output_list: list[str]
+    ):
         try:
             async for line in stream:
                 output_list.append(line)
@@ -90,10 +98,15 @@ class ModalSandboxRuntime:
         except Exception as e:
             print(f"Error reading stream: {e}")
 
-    async def _read_output(self, p: modal.container_process.ContainerProcess, stdout: list[str], stderr: list[str]):
+    async def _read_output(
+        self,
+        p: modal.container_process.ContainerProcess,
+        stdout: list[str],
+        stderr: list[str],
+    ):
         self._stream_tasks = [
             asyncio.create_task(self._read_stream(p.stdout, stdout)),
-            asyncio.create_task(self._read_stream(p.stderr, stderr))
+            asyncio.create_task(self._read_stream(p.stderr, stderr)),
         ]
         try:
             await asyncio.gather(*self._stream_tasks)
@@ -102,7 +115,7 @@ class ModalSandboxRuntime:
 
     def write_file(self, file_path: str, content: str):
         self.sandbox.open(file_path, "w").write(content)
-    
+
     def exec(self, command: str) -> tuple[str, int]:
         """
         Execute a command in the sandbox.
@@ -115,14 +128,14 @@ class ModalSandboxRuntime:
         stderr = []
         try:
             # We separate stdout/stderr because some tests rely on them being separate.
-            # We still read stdout/stderr simultaneously to continuously 
+            # We still read stdout/stderr simultaneously to continuously
             # flush both streams and avoid blocking.
             asyncio.run(self._read_output(p, stdout, stderr))
         except Exception as e:
             print(f"Error during command execution: {e}")
         p.wait()
         return "".join(stdout + stderr), p.returncode
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._stream_tasks:
             try:
@@ -149,7 +162,7 @@ class ModalSandboxRuntime:
         # add trusted host flag for Modal's PyPI mirror
         env_script = env_script.replace(
             "conda activate testbed && python -m pip install -r $HOME/requirements.txt",
-            "conda activate testbed && python -m pip install --trusted-host pypi-mirror.modal.local -r $HOME/requirements.txt"
+            "conda activate testbed && python -m pip install --trusted-host pypi-mirror.modal.local -r $HOME/requirements.txt",
         )
         repo_script = test_spec.install_repo_script
 
@@ -198,7 +211,9 @@ class ModalSandboxRuntime:
 
 
 def get_log_dir(pred: dict, run_id: str, instance_id: str) -> Path:
-    model_name_or_path = cast(str, pred.get("model_name_or_path", "None").replace("/", "__"))
+    model_name_or_path = cast(
+        str, pred.get("model_name_or_path", "None").replace("/", "__")
+    )
     return RUN_EVALUATION_LOG_DIR / run_id / model_name_or_path / instance_id
 
 
@@ -207,14 +222,15 @@ def get_log_dir(pred: dict, run_id: str, instance_id: str) -> Path:
         LOCAL_SANDBOX_ENTRYPOINT_PATH,
         REMOTE_SANDBOX_ENTRYPOINT_PATH,
     ),
-    timeout=120*60, # Much larger than default timeout to account for image build time
+    timeout=120
+    * 60,  # Much larger than default timeout to account for image build time
 )
 def run_instance_modal(
-        test_spec: TestSpec,
-        pred: dict,
-        run_id: str,
-        timeout: int | None = None,
-    ) -> TestOutput:
+    test_spec: TestSpec,
+    pred: dict,
+    run_id: str,
+    timeout: int | None = None,
+) -> TestOutput:
     """
     Run a single instance with the given prediction.
 
@@ -271,7 +287,6 @@ def run_instance_modal(
         else:
             logger.info(f"{APPLY_PATCH_PASS}:\n{apply_patch_output}")
 
-
         # Get git diff before running eval script
         git_diff_output_before, returncode = runner.exec(
             "cd /testbed && git diff",
@@ -299,7 +314,7 @@ def run_instance_modal(
         total_runtime = time.time() - start_time
 
         test_output_path = log_dir / "test_output.txt"
-        logger.info(f'Test runtime: {total_runtime:_.2f} seconds')
+        logger.info(f"Test runtime: {total_runtime:_.2f} seconds")
         with open(test_output_path, "w") as f:
             f.write(test_output)
             logger.info(f"Test output for {instance_id} written to {test_output_path}")
@@ -354,9 +369,11 @@ def run_instance_modal(
             errored=True,
         )
     except Exception as e:
-        error_msg = (f"Error in evaluating model for {instance_id}: {e}\n"
-                     f"{traceback.format_exc()}\n"
-                     f"Check ({logger.log_file}) for more information.")
+        error_msg = (
+            f"Error in evaluating model for {instance_id}: {e}\n"
+            f"{traceback.format_exc()}\n"
+            f"Check ({logger.log_file}) for more information."
+        )
         logger.error(error_msg)
         return TestOutput(
             instance_id=instance_id,
@@ -370,12 +387,12 @@ def run_instance_modal(
 
 
 def run_instances_modal(
-        predictions: dict,
-        instances: list,
-        full_dataset: list,
-        run_id: str,
-        timeout: int,
-    ):
+    predictions: dict,
+    instances: list,
+    full_dataset: list,
+    run_id: str,
+    timeout: int,
+):
     """
     Run all instances for the given predictions on Modal.
 
@@ -393,7 +410,9 @@ def run_instances_modal(
 
             # Check for instances that have already been run
             for test_spec in test_specs:
-                log_dir = get_log_dir(predictions[test_spec.instance_id], run_id, test_spec.instance_id)
+                log_dir = get_log_dir(
+                    predictions[test_spec.instance_id], run_id, test_spec.instance_id
+                )
                 if log_dir.exists():
                     continue
                 run_test_specs.append(test_spec)

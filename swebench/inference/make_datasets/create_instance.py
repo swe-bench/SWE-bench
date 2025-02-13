@@ -9,7 +9,10 @@ import unidiff
 from tqdm.auto import tqdm
 
 from swebench.inference.make_datasets.tokenize_dataset import TOKENIZER_FUNCS
-from swebench.inference.make_datasets.utils import AutoContextManager, ingest_directory_contents
+from swebench.inference.make_datasets.utils import (
+    AutoContextManager,
+    ingest_directory_contents,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -303,9 +306,9 @@ def add_retrieval_results(input_instances, retrieval_file, k, file_source):
     Adds retrieval results to input_instances in-place
     """
     retrieval_results_path = Path(retrieval_file)
-    assert (
-        retrieval_results_path.exists()
-    ), f"Retrieval results not found at {retrieval_results_path}"
+    assert retrieval_results_path.exists(), (
+        f"Retrieval results not found at {retrieval_results_path}"
+    )
     retrieval_results = [json.loads(line) for line in open(retrieval_results_path)]
     retrieval_results = {x["instance_id"]: x["hits"] for x in retrieval_results}
     for instance_id, instance in tqdm(
@@ -346,7 +349,7 @@ def add_text_inputs(
     progress_file=None,
 ) -> None:
     """Process instances and save results to progress file.
-    
+
     Args:
     - instances: dictionary with unprocessed input instances
     - retrieval_file: if using retrieval method for file_contents, specify retrieval_file
@@ -357,67 +360,83 @@ def add_text_inputs(
     - progress_file: required, path to save processed instances
     """
     assert progress_file is not None, "progress_file is required"
-    
+
     # Create progress file directory if it doesn't exist
     progress_path = Path(progress_file)
     progress_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Load already processed instances
     processed_ids = set()
     file_exists = os.path.exists(progress_file)
-    
+
     if file_exists:
         with open(progress_file) as f:
             for line in f:
                 instance = json.loads(line)
-                processed_ids.add(instance['instance_id'])
+                processed_ids.add(instance["instance_id"])
         logger.info(f"Found {len(processed_ids)} already processed instances")
-        progress_file_handle = open(progress_file, 'a')
+        progress_file_handle = open(progress_file, "a")
     else:
-        progress_file_handle = open(progress_file, 'w')
+        progress_file_handle = open(progress_file, "w")
 
     try:
         if max_context_len is not None:
-            assert tokenizer_name is not None, "Must specify tokenizer_name if using max_context_len"
+            assert tokenizer_name is not None, (
+                "Must specify tokenizer_name if using max_context_len"
+            )
             tokenizer, tokenizer_func = TOKENIZER_FUNCS[tokenizer_name]
-            
+
         # Add retrieval results if needed
         if file_source in {"bm25"}:
             instances = deepcopy(instances)
             add_retrieval_results(instances, retrieval_file, k, file_source)
 
         # Filter out already processed instances
-        instances_to_process = {k: v for k, v in instances.items() if k not in processed_ids}
+        instances_to_process = {
+            k: v for k, v in instances.items() if k not in processed_ids
+        }
         logger.info(f"Processing {len(instances_to_process)} instances")
 
         orig_dir = os.getcwd()
-        with TemporaryDirectory(dir="/scratch" if os.path.exists("/scratch") else "/tmp") as root_dir:
+        with TemporaryDirectory(
+            dir="/scratch" if os.path.exists("/scratch") else "/tmp"
+        ) as root_dir:
             for instance_id, instance in tqdm(
                 instances_to_process.items(),
                 total=len(instances_to_process),
-                desc="Processing instances"
+                desc="Processing instances",
             ):
                 try:
                     with AutoContextManager(instance, root_dir, verbose=verbose) as cm:
                         # Process instance
                         processed_instance = deepcopy(instance)
-                        
+
                         # Add readmes
                         readmes = cm.get_readme_files()
                         processed_instance["readmes"] = ingest_files(readmes)
-                        
+
                         # Handle file contents based on configuration
                         if max_context_len is not None:
                             processed_instance["file_contents"] = dict()
-                            base_text_inputs = PROMPT_FUNCTIONS[prompt_style](processed_instance)
-                            base_text_input_length = len(tokenizer_func(base_text_inputs, tokenizer))
-                            
+                            base_text_inputs = PROMPT_FUNCTIONS[prompt_style](
+                                processed_instance
+                            )
+                            base_text_input_length = len(
+                                tokenizer_func(base_text_inputs, tokenizer)
+                            )
+
                         if file_source == "oracle":
-                            processed_instance["file_contents"] = ingest_files(get_oracle_filenames(processed_instance))
+                            processed_instance["file_contents"] = ingest_files(
+                                get_oracle_filenames(processed_instance)
+                            )
                         elif file_source == "bm25":
-                            processed_instance["file_contents"] = ingest_files([x["docid"] for x in processed_instance["hits"]])
+                            processed_instance["file_contents"] = ingest_files(
+                                [x["docid"] for x in processed_instance["hits"]]
+                            )
                         elif file_source == "all":
-                            processed_instance["file_contents"] = ingest_directory_contents(cm.repo_path)
+                            processed_instance["file_contents"] = (
+                                ingest_directory_contents(cm.repo_path)
+                            )
                         elif file_source == "none":
                             processed_instance["file_contents"] = dict()
                         else:
@@ -427,12 +446,20 @@ def add_text_inputs(
                         if max_context_len is not None:
                             cur_input_len = base_text_input_length
                             include_files = []
-                            for filename in [x["docid"] for x in processed_instance["hits"]]:
-                                content = make_code_text({filename: processed_instance["file_contents"][filename]})
+                            for filename in [
+                                x["docid"] for x in processed_instance["hits"]
+                            ]:
+                                content = make_code_text(
+                                    {
+                                        filename: processed_instance["file_contents"][
+                                            filename
+                                        ]
+                                    }
+                                )
                                 if tokenizer_name == "llama":
                                     tokens = tokenizer_func("\n" + content, tokenizer)
                                     idx = tokens.index(13)
-                                    tokens = tokens[idx + 1:]
+                                    tokens = tokens[idx + 1 :]
                                 else:
                                     tokens = tokenizer_func(content, tokenizer)
                                 if cur_input_len + len(tokens) < max_context_len:
@@ -444,18 +471,22 @@ def add_text_inputs(
                             }
 
                         # Generate final text inputs
-                        processed_instance["text_inputs"] = PROMPT_FUNCTIONS[prompt_style](processed_instance)
-                        
+                        processed_instance["text_inputs"] = PROMPT_FUNCTIONS[
+                            prompt_style
+                        ](processed_instance)
+
                         # Save to progress file
-                        progress_file_handle.write(json.dumps(processed_instance) + '\n')
+                        progress_file_handle.write(
+                            json.dumps(processed_instance) + "\n"
+                        )
                         progress_file_handle.flush()
 
                 except Exception as e:
                     print(f"Failed on instance {instance_id}", e)
                     traceback.print_exc()
                     # Save failed instance
-                    failed_instance = {**instance, 'text_inputs': None}
-                    progress_file_handle.write(json.dumps(failed_instance) + '\n')
+                    failed_instance = {**instance, "text_inputs": None}
+                    progress_file_handle.write(json.dumps(failed_instance) + "\n")
                     progress_file_handle.flush()
                 finally:
                     os.chdir(orig_dir)
