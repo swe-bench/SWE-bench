@@ -5,7 +5,7 @@ We’re releasing an update that improves the reliability of the SWE-bench evalu
 
 In the original setup, we hypothesized that `conda` environments would be enough to enforce reproducible evaluation.
 In hindsight, it is underspecified.
-This past April, we put out [Bug Report 4/5/2024](docs/reports/20240405_eval_bug/README.md), that among several upgrades, adds explicit versioning for packages.
+This past April, we put out [Bug Report 4/5/2024](../20240415_eval_bug), that among several upgrades, adds explicit versioning for packages.
 
 However, SWE-bench evaluation remained sensitive to discrepancies originating from different platforms and user-specific configurations, leading to inconsistent results.
 To eliminate these irregularities, our new harness provisions **per-sample Docker images with Python virtual environments** that have been rigorously tested.
