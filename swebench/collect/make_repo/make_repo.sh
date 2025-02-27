@@ -67,7 +67,7 @@ if [ -d "$NEW_REPO_NAME/.github/workflows" ]; then
     git push origin main;  # Change 'master' to your desired branch
     cd ..;
 else
-    echo "$REPO_NAME/.github/workflows does not exist. No action required."
+    echo "$NEW_REPO_NAME/.github/workflows does not exist. No action required."
 fi
 
 rm -rf "$NEW_REPO_NAME"
