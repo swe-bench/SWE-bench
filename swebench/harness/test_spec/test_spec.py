@@ -12,8 +12,8 @@ from swebench.harness.constants import (
     MAP_REPO_TO_EXT,
     MAP_REPO_VERSION_TO_SPECS,
     USE_X86,
+    SWEbenchInstance,
 )
-from swebench.harness.constants.constants import SWEbenchInstance
 from swebench.harness.dockerfiles import (
     get_dockerfile_base,
     get_dockerfile_env,

@@ -22,9 +22,7 @@ from swebench.harness.test_spec.test_spec import (
     make_test_spec,
     TestSpec,
 )
-from swebench.harness.utils import run_threadpool
-
-ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+from swebench.harness.utils import ansi_escape, run_threadpool
 
 
 class BuildImageError(Exception):
@@ -142,13 +140,13 @@ def build_image(
         for chunk in response:
             if "stream" in chunk:
                 # Remove ANSI escape sequences from the log
-                chunk_stream = ansi_escape.sub("", chunk["stream"])
+                chunk_stream = ansi_escape(chunk["stream"])
                 logger.info(chunk_stream.strip())
                 buildlog += chunk_stream
             elif "errorDetail" in chunk:
                 # Decode error message, raise BuildError
                 logger.error(
-                    f"Error: {ansi_escape.sub('', chunk['errorDetail']['message'])}"
+                    f"Error: {ansi_escape(chunk['errorDetail']['message'])}"
                 )
                 raise docker.errors.BuildError(
                     chunk["errorDetail"]["message"], buildlog
